@@ -263,14 +263,17 @@ export async function loadSite(config: InkpathConfig): Promise<Site> {
   for (const relativeFilePath of relativePaths) {
     const sourcePath = path.join(config.contentDir, relativeFilePath);
     const relativePath = toPosix(relativeFilePath);
+    const fileName = path.posix.basename(relativePath);
+    if (/^readme\.md$/i.test(fileName)) {
+      throw new Error(`${relativePath}: content overview files must be named INDEX.md, not README.md`);
+    }
     const parsed = parseFrontmatter(await readFile(sourcePath, "utf8"), relativePath);
     if (parsed.attributes.draft) continue;
-    const fileName = path.posix.basename(relativePath);
     documents.push({
       ...parsed,
       directory: path.posix.dirname(relativePath) === "." ? "" : path.posix.dirname(relativePath),
       fileName,
-      isIndex: /^(?:readme|index)\.md$/i.test(fileName),
+      isIndex: /^index\.md$/i.test(fileName),
       relativePath,
       sourcePath,
     });
@@ -280,12 +283,12 @@ export async function loadSite(config: InkpathConfig): Promise<Site> {
   for (const document of documents.filter((item) => item.isIndex)) {
     const existing = indexByDirectory.get(document.directory);
     if (existing) {
-      throw new Error(`${document.directory || "content"}: use either README.md or index.md, not both`);
+      throw new Error(`${document.directory || "content"}: use only one INDEX.md per directory`);
     }
     indexByDirectory.set(document.directory, document);
   }
   const rootDocument = indexByDirectory.get("");
-  if (!rootDocument) throw new Error("content needs a root README.md or index.md");
+  if (!rootDocument) throw new Error("content needs a root INDEX.md");
 
   const pages: Page[] = [];
   const pageByRoute = new Map<string, Page>();

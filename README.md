@@ -38,18 +38,18 @@ Inkpath uses the filesystem as the navigation tree.
 
 ```text
 content/
-├── README.md
+├── INDEX.md
 ├── 01-cloud-infrastructure/
-│   ├── README.md
+│   ├── INDEX.md
 │   ├── 01-cloud-foundations.md
 │   └── 02-containers.md
 └── 02-system-design/
-    ├── README.md
+    ├── INDEX.md
     └── 01-frame-the-problem.md
 ```
 
-- The root `README.md` is the home page.
-- A directory `README.md` is the section page.
+- The root `INDEX.md` is the home page.
+- A directory `INDEX.md` is the section overview.
 - Other Markdown files are notes.
 - A numeric filename prefix supplies the default order and is omitted from the URL.
 - Frontmatter `order` and `slug` override those defaults.

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -178,7 +178,7 @@ test("keeps a parent link on nested section pages", async () => {
   const nested = path.join(project, "content", "01-foundations", "01-nested");
   await mkdir(nested);
   await writeFile(
-    path.join(nested, "README.md"),
+    path.join(nested, "INDEX.md"),
     "---\ntitle: Nested section\ndescription: A section inside Foundations.\n---\n\nNested content.\n",
   );
 
@@ -228,6 +228,35 @@ test("removes footnote syntax from automatic summaries", async (t) => {
       assert.equal(result.site.pageBySource.get("01-foundations/01-first.md")?.summary, fixture.summary);
     });
   }
+});
+
+test("uses INDEX.md as the content overview convention", async (t) => {
+  await t.test("requires a root INDEX.md", async () => {
+    const project = await copyFixture();
+    await rm(path.join(project, "content", "INDEX.md"));
+    await assert.rejects(buildSite(project, { write: false }), /content needs a root INDEX\.md/);
+  });
+
+  await t.test("rejects a legacy README.md overview", async () => {
+    const project = await copyFixture();
+    await rename(path.join(project, "content", "INDEX.md"), path.join(project, "content", "README.md"));
+    await assert.rejects(
+      buildSite(project, { write: false }),
+      /README\.md: content overview files must be named INDEX\.md, not README\.md/,
+    );
+  });
+
+  await t.test("rejects two case variants where the filesystem permits them", async (caseTest) => {
+    const project = await copyFixture();
+    const content = path.join(project, "content");
+    await writeFile(path.join(content, "index.md"), await readFile(path.join(content, "INDEX.md"), "utf8"));
+    const variants = (await readdir(content)).filter((entry) => entry.toLowerCase() === "index.md");
+    if (variants.length < 2) {
+      caseTest.skip("filesystem is case-insensitive");
+      return;
+    }
+    await assert.rejects(buildSite(project, { write: false }), /content: use only one INDEX\.md per directory/);
+  });
 });
 
 test("fails on missing documents, fragments, and assets", async (t) => {
@@ -363,7 +392,7 @@ test("never treats legacy scratch directory names as disposable", async (t) => {
 
       await buildSite(project);
       await buildSite(project);
-      assert.match(await readFile(path.join(content, "README.md"), "utf8"), /Fixture notes/);
+      assert.match(await readFile(path.join(content, "INDEX.md"), "utf8"), /Fixture notes/);
       const entries = await readdir(project);
       assert.equal(entries.some((entry) => entry.startsWith(".site.inkpath-stage-")), false);
       assert.equal(entries.some((entry) => entry.startsWith(".site.inkpath-previous-")), false);
