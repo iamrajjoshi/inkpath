@@ -19,6 +19,7 @@ type RawConfig = {
   theme?: {
     accent?: string;
     interactive?: string;
+    stylesheet?: string;
     subtle?: string;
   };
 };
@@ -91,11 +92,32 @@ function optionalPublicAsset(value: unknown, label: string): string | undefined 
     asset.includes("\\") ||
     asset.includes("?") ||
     asset.includes("#") ||
-    segments.some((segment) => !segment || segment === "." || segment === "..")
+    segments.some((segment) => !segment || segment.startsWith("."))
   ) {
     throw new Error(`${label} must be a relative path inside public`);
   }
   return segments.join("/");
+}
+
+async function validatePublicFile(publicDir: string, asset: string, label: string): Promise<void> {
+  const segments = asset.split("/");
+  let cursor = publicDir;
+  for (const [index, segment] of segments.entries()) {
+    cursor = path.join(cursor, segment);
+    let info: Awaited<ReturnType<typeof lstat>>;
+    try {
+      info = await lstat(cursor);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new Error(`${label} does not exist in public: ${asset}`);
+      }
+      throw error;
+    }
+    const last = index === segments.length - 1;
+    if (info.isSymbolicLink() || (last ? !info.isFile() : !info.isDirectory())) {
+      throw new Error(`${label} must be a regular file in public: ${asset}`);
+    }
+  }
 }
 
 export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig> {
@@ -138,14 +160,7 @@ export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig>
   const description = optionalString(site.description, "site.description");
   const url = optionalString(site.url, "site.url");
   const logo = optionalPublicAsset(site.logo, "site.logo");
-  if (logo) {
-    const logoPath = path.resolve(publicDir, ...logo.split("/"));
-    if (!(await exists(logoPath))) throw new Error(`site.logo does not exist in public: ${logo}`);
-    const info = await lstat(logoPath);
-    if (info.isSymbolicLink() || !info.isFile()) {
-      throw new Error(`site.logo must be a regular file in public: ${logo}`);
-    }
-  }
+  if (logo) await validatePublicFile(publicDir, logo, "site.logo");
   if (
     raw.theme !== undefined &&
     (typeof raw.theme !== "object" || raw.theme === null || Array.isArray(raw.theme))
@@ -153,6 +168,17 @@ export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig>
     throw new Error("theme must be a YAML mapping");
   }
   const theme = raw.theme ?? {};
+  const stylesheet = optionalPublicAsset(theme.stylesheet, "theme.stylesheet");
+  if (stylesheet && !stylesheet.toLowerCase().endsWith(".css")) {
+    throw new Error("theme.stylesheet must point to a CSS file in public");
+  }
+  if (
+    stylesheet &&
+    [theme.accent, theme.interactive, theme.subtle].some((value) => value !== undefined)
+  ) {
+    throw new Error("theme.stylesheet cannot be combined with theme color settings");
+  }
+  if (stylesheet) await validatePublicFile(publicDir, stylesheet, "theme.stylesheet");
   return {
     projectRoot,
     contentDir,
@@ -169,6 +195,7 @@ export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig>
     theme: {
       accent: optionalHexColor(theme.accent, "theme.accent") ?? "#f36f21",
       interactive: optionalHexColor(theme.interactive, "theme.interactive") ?? "#a54016",
+      ...(stylesheet ? { stylesheet } : {}),
       subtle: optionalHexColor(theme.subtle, "theme.subtle") ?? "#fff0e8",
     },
   };

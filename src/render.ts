@@ -11,6 +11,13 @@ function publicAssetUrl(site: Site, asset: string): string {
   return `${site.config.site.basePath}/${encoded}`;
 }
 
+function stylesheetUrl(site: Site): string {
+  const stylesheet = site.config.theme.stylesheet;
+  return stylesheet
+    ? publicAssetUrl(site, stylesheet)
+    : `${site.config.site.basePath}/_inkpath/theme.css`;
+}
+
 function renderSiteMark(site: Site): string {
   const logo = site.config.site.logo;
   if (logo) {
@@ -156,7 +163,7 @@ export function renderDocument(site: Site, page: Page, diagrams: number): string
   <meta name="generator" content="Inkpath ${escapeHtml(INKPATH_VERSION)}">
   ${canonical ? `<link rel="canonical" href="${escapeHtml(canonical)}">` : ""}
   <link rel="icon" href="${escapeHtml(`${site.config.site.basePath}/favicon.svg`)}" type="image/svg+xml">
-  <link rel="stylesheet" href="${escapeHtml(`${site.config.site.basePath}/_inkpath/theme.css`)}">
+  <link rel="stylesheet" href="${escapeHtml(stylesheetUrl(site))}">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to content</a>
@@ -183,5 +190,5 @@ export function renderDocument(site: Site, page: Page, diagrams: number): string
 
 export function renderNotFound(site: Site): string {
   const siteTitle = site.config.site.title ?? site.home.title;
-  return `<!doctype html><html lang="${escapeHtml(site.config.site.lang)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Not found · ${escapeHtml(siteTitle)}</title><link rel="stylesheet" href="${escapeHtml(`${site.config.site.basePath}/_inkpath/theme.css`)}"></head><body><main class="page-shell"><header class="page-header"><h1>Page not found</h1><p class="lede">The requested note does not exist.</p></header><p><a href="${escapeHtml(pageUrl(site, site.home))}">Return to the contents</a></p></main></body></html>\n`;
+  return `<!doctype html><html lang="${escapeHtml(site.config.site.lang)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Not found · ${escapeHtml(siteTitle)}</title><link rel="stylesheet" href="${escapeHtml(stylesheetUrl(site))}"></head><body><main class="page-shell"><header class="page-header"><h1>Page not found</h1><p class="lede">The requested note does not exist.</p></header><p><a href="${escapeHtml(pageUrl(site, site.home))}">Return to the contents</a></p></main></body></html>\n`;
 }

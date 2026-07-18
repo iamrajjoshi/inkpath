@@ -145,6 +145,15 @@ theme:
 
 Paths must stay inside the project. `site.logo` points to a regular file under `public/`. `basePath` prefixes generated links and assets.
 
+To own the full stylesheet, put a CSS file under `public/` and set its path:
+
+```yaml
+theme:
+  stylesheet: styles/notes.css
+```
+
+Inkpath links this file instead of generating `_inkpath/theme.css`. A custom stylesheet cannot be combined with the three theme color settings.
+
 ## Build behavior
 
 Inkpath parses all Markdown before it replaces the output directory. A failed build leaves the last successful site in place. Generated pages contain no framework runtime, search service, analytics, or database.

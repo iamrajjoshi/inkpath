@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
+  access,
   cp,
   mkdir,
   mkdtemp,
@@ -17,6 +18,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { buildSite } from "../src/build.js";
+import { loadConfig } from "../src/config.js";
 import { navigationPages } from "../src/content.js";
 import { INKPATH_VERSION } from "../src/version.js";
 
@@ -227,6 +229,84 @@ test("supports a constrained site accent palette", async () => {
   assert.match(theme, /--accent-soft: #f0fdfa/);
   assert.match(theme, /--interactive: #0f766e/);
   assert.match(theme, /--inline-code: #f0fdfa/);
+});
+
+test("uses a project-owned stylesheet instead of the generated theme", async () => {
+  const project = await copyFixture();
+  const config = path.join(project, "inkpath.yaml");
+  const output = path.join(project, "site");
+  await buildSite(project);
+  await access(path.join(output, "_inkpath", "theme.css"));
+
+  const stylesheet = path.join(project, "public", "styles", "notes.css");
+  await mkdir(path.dirname(stylesheet), { recursive: true });
+  await writeFile(stylesheet, ":root { --ink: #102a2a; }\n", "utf8");
+  await writeFile(
+    config,
+    `${await readFile(config, "utf8")}\ntheme:\n  stylesheet: styles/notes.css\n`,
+  );
+
+  await buildSite(project);
+  const home = await readFile(path.join(output, "index.html"), "utf8");
+  const notFound = await readFile(path.join(output, "404.html"), "utf8");
+  assert.match(home, /href="\/docs\/styles\/notes\.css"/);
+  assert.match(notFound, /href="\/docs\/styles\/notes\.css"/);
+  assert.equal(
+    await readFile(path.join(output, "styles", "notes.css"), "utf8"),
+    ":root { --ink: #102a2a; }\n",
+  );
+  await assert.rejects(access(path.join(output, "_inkpath", "theme.css")));
+  await access(path.join(output, "_inkpath", "inkpath.js"));
+});
+
+test("rejects unsafe or invalid project-owned stylesheets", async (t) => {
+  for (const [value, expected] of [
+    ["../notes.css", /theme\.stylesheet must be a relative path inside public/],
+    ["/notes.css", /theme\.stylesheet must be a relative path inside public/],
+    ["https://example.com/notes.css", /theme\.stylesheet must be a relative path inside public/],
+    [".styles/notes.css", /theme\.stylesheet must be a relative path inside public/],
+    ["missing.css", /theme\.stylesheet does not exist in public/],
+    ["favicon.svg", /theme\.stylesheet must point to a CSS file in public/],
+  ] as const) {
+    await t.test(value, async () => {
+      const project = await copyFixture();
+      const config = path.join(project, "inkpath.yaml");
+      await writeFile(
+        config,
+        `${await readFile(config, "utf8")}\ntheme:\n  stylesheet: ${JSON.stringify(value)}\n`,
+      );
+      await assert.rejects(buildSite(project), expected);
+    });
+  }
+});
+
+test("rejects theme colors alongside a project-owned stylesheet", async () => {
+  const project = await copyFixture();
+  const config = path.join(project, "inkpath.yaml");
+  await writeFile(path.join(project, "public", "notes.css"), "body {}\n", "utf8");
+  await writeFile(
+    config,
+    `${await readFile(config, "utf8")}\ntheme:\n  stylesheet: notes.css\n  accent: "#0f766e"\n`,
+  );
+
+  await assert.rejects(
+    buildSite(project),
+    /theme\.stylesheet cannot be combined with theme color settings/,
+  );
+});
+
+test("loadConfig rejects a stylesheet reached through a symbolic link", async () => {
+  const project = await copyFixture();
+  const external = await mkdtemp(path.join(os.tmpdir(), "inkpath-stylesheet-"));
+  await writeFile(path.join(external, "notes.css"), "body {}\n", "utf8");
+  await symlink(external, path.join(project, "public", "styles"), "dir");
+  const config = path.join(project, "inkpath.yaml");
+  await writeFile(
+    config,
+    `${await readFile(config, "utf8")}\ntheme:\n  stylesheet: styles/notes.css\n`,
+  );
+
+  await assert.rejects(loadConfig(project), /theme\.stylesheet must be a regular file in public/);
 });
 
 test("rejects unsafe theme color values", async (t) => {

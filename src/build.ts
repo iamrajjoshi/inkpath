@@ -161,12 +161,14 @@ async function writeOutput(
 
   try {
     if (await exists(config.publicDir)) await copyDirectory(config.publicDir, stage, false);
-    await mkdir(path.join(stage, "_inkpath"), { recursive: true });
-    await writeFile(
-      path.join(stage, "_inkpath", "theme.css"),
-      renderThemeCss(config.theme).trimStart(),
-      "utf8",
-    );
+    if (!config.theme.stylesheet) {
+      await mkdir(path.join(stage, "_inkpath"), { recursive: true });
+      await writeFile(
+        path.join(stage, "_inkpath", "theme.css"),
+        renderThemeCss(config.theme).trimStart(),
+        "utf8",
+      );
+    }
 
     const contentAssets = path.join(stage, "_content");
     await mkdir(contentAssets, { recursive: true });
@@ -181,7 +183,10 @@ async function writeOutput(
     const firstPage = renders.keys().next().value as Page | undefined;
     if (!firstPage) throw new Error("cannot render an empty site");
     await writeFile(path.join(stage, "404.html"), renderNotFound(site), "utf8");
-    if (diagrams) await bundleMermaid(stage);
+    if (diagrams) {
+      await mkdir(path.join(stage, "_inkpath"), { recursive: true });
+      await bundleMermaid(stage);
+    }
 
     let movedPrevious = false;
     if (await exists(config.outputDir)) {

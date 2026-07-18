@@ -31,6 +31,7 @@ export type SiteSettings = {
 export type ThemeSettings = {
   accent: string;
   interactive: string;
+  stylesheet?: string;
   subtle: string;
 };
 
