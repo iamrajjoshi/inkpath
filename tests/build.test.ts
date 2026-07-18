@@ -93,6 +93,8 @@ test("builds deterministic static pages with the complete Markdown surface", asy
     /<nav class="breadcrumbs" aria-label="Breadcrumb"><ol><li><a href="\/docs\/">Home<\/a><\/li><\/ol><\/nav>/,
   );
   assert.doesNotMatch(homePage, /aria-label="Breadcrumb"/);
+  assert.match(homePage, /<h2 id="content-list-title" class="section-heading">Collections<\/h2>/);
+  assert.match(sectionPage, /<h2 id="content-list-title" class="section-heading">Notes<\/h2>/);
   assert.match(secondPage, /<h2 id="page-toc-title">Contents<\/h2>/);
   assert.doesNotMatch(firstPage, /id="page-toc-title"/);
   assert.match(firstPage, /<li><a href="\/docs\/foundations\/">Foundations<\/a><\/li>/);
@@ -256,7 +258,7 @@ test("supports arbitrarily nested sections, lists, links, and local pagination",
   const betaHtml = await readFile(path.join(output, "foundations", "layer-one", "middle", "leaf", "beta", "index.html"), "utf8");
   assert.match(foundationsHtml, /href="\/docs\/foundations\/layer-one\/"/);
   assert.doesNotMatch(foundationsHtml, /href="\/docs\/foundations\/layer-one\/middle\/"/);
-  assert.match(oneHtml, /<h2 id="content-list-title" class="section-heading">Contents<\/h2>/);
+  assert.match(oneHtml, /<h2 id="content-list-title" class="section-heading">Notes<\/h2>/);
   assert.match(oneHtml, /href="\/docs\/foundations\/layer-one\/middle\/"/);
   assert.doesNotMatch(oneHtml, /href="\/docs\/foundations\/layer-one\/middle\/leaf\/"/);
   assert.match(twoHtml, /href="\/docs\/foundations\/layer-one\/middle\/leaf\/"/);

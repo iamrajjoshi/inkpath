@@ -83,8 +83,7 @@ function contentItemMeta(page: Page): string {
 function renderContentList(site: Site, page: Page): string {
   const children = page.children.filter((child) => child.kind === "section" || child.kind === "page");
   if (!children.length) return "";
-  const label =
-    page.kind === "home" ? "Collections" : children.some((child) => child.kind === "section") ? "Contents" : "Notes";
+  const label = page.kind === "home" ? "Collections" : "Notes";
   const items = children
     .map(
       (child) => `<li>

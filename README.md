@@ -53,7 +53,8 @@ content/
 - The root `INDEX.md` is the home page.
 - A directory `INDEX.md` is the section overview. Sections can nest to any practical filesystem depth.
 - Every directory containing published Markdown, including through a descendant directory, needs its own `INDEX.md`. Asset-only directories do not.
-- Each section lists its immediate children. Previous and next links stay within direct note siblings and never cross a section boundary.
+- The home page labels its immediate children `Collections`; every section labels its immediate children `Notes`.
+- Each section lists only its immediate children. Previous and next links stay within direct note siblings and never cross a section boundary.
 - Every non-home header links all ancestors from Home through the immediate parent as a compact breadcrumb; the heading names the current page.
 - Other Markdown files are notes.
 - A numeric filename prefix supplies the default order and is omitted from the URL.
