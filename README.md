@@ -42,18 +42,25 @@ content/
 ├── 01-cloud-infrastructure/
 │   ├── INDEX.md
 │   ├── 01-cloud-foundations.md
-│   └── 02-containers.md
+│   └── 02-kubernetes/
+│       ├── INDEX.md
+│       └── 01-networking.md
 └── 02-system-design/
     ├── INDEX.md
     └── 01-frame-the-problem.md
 ```
 
 - The root `INDEX.md` is the home page.
-- A directory `INDEX.md` is the section overview.
+- A directory `INDEX.md` is the section overview. Sections can nest to any practical filesystem depth.
+- Every directory containing published Markdown, including through a descendant directory, needs its own `INDEX.md`. Asset-only directories do not.
+- Each section lists its immediate children. Previous and next links stay within direct note siblings and never cross a section boundary.
+- Every non-home header links all ancestors from Home through the immediate parent as a compact breadcrumb; the heading names the current page.
 - Other Markdown files are notes.
 - A numeric filename prefix supplies the default order and is omitted from the URL.
 - Frontmatter `order` and `slug` override those defaults.
 - Section and note lists, compact page details, previous/next links, and a contents list for notes with at least three headings are generated from those files.
+
+If a build reports that a published Markdown directory needs an `INDEX.md`, add an overview to the named directory or move its Markdown under an indexed section. Inkpath enforces this so the visible navigation tree and URL tree cannot silently diverge.
 
 Minimal frontmatter:
 
@@ -65,13 +72,13 @@ order: 3
 ---
 ```
 
-Supported presentation metadata includes `number`, `date`, and `updated`. Other fields, including `duration`, `difficulty`, and `tags`, are validated or preserved for sites that want to use them later.
+Supported presentation metadata includes `number`, `date`, and `updated`. `number` is an optional display label copied verbatim from frontmatter; it is not generated and does not control ordering. Other fields, including `duration`, `difficulty`, and `tags`, are validated or preserved for sites that want to use them later.
 
 If `description` and `summary` are absent, Inkpath uses the first prose sentence as the page summary. This is deterministic; it does not call a model or a network service.
 
 ## Markdown
 
-Inkpath supports headings, links, images, tables, blockquotes, lists, fenced code, syntax highlighting, footnotes, and block annotations.
+Inkpath supports headings, links, images, tables, blockquotes, nested lists, fenced code, syntax highlighting, footnotes, and block annotations. Markdown lists can nest to any practical document depth.
 
 ```md
 A write is not durable merely because the API returned.[^durability]

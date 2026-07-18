@@ -233,8 +233,19 @@ function routeSegmentsForDirectory(
 }
 
 function sortPages(pages: Page[]): void {
-  pages.sort((left, right) => left.order - right.order || left.title.localeCompare(right.title));
+  pages.sort(
+    (left, right) =>
+      left.order - right.order ||
+      left.title.localeCompare(right.title) ||
+      left.relativePath.localeCompare(right.relativePath),
+  );
   for (const page of pages) sortPages(page.children);
+}
+
+function directoryChain(directory: string): string[] {
+  if (!directory) return [];
+  const parts = directory.split("/");
+  return parts.map((_, index) => parts.slice(0, index + 1).join("/"));
 }
 
 export function navigationPages(site: Site): Page[] {
@@ -289,6 +300,13 @@ export async function loadSite(config: InkpathConfig): Promise<Site> {
   }
   const rootDocument = indexByDirectory.get("");
   if (!rootDocument) throw new Error("content needs a root INDEX.md");
+  for (const document of documents) {
+    for (const directory of directoryChain(document.directory)) {
+      if (!indexByDirectory.has(directory)) {
+        throw new Error(`${directory}: published Markdown directories need an INDEX.md`);
+      }
+    }
+  }
 
   const pages: Page[] = [];
   const pageByRoute = new Map<string, Page>();

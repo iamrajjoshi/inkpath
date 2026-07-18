@@ -18,17 +18,30 @@ function renderSiteMark(site: Site): string {
   return `<span class="site-mark" aria-hidden="true"><span></span><span></span><span></span></span>`;
 }
 
+function renderBreadcrumb(site: Site, page: Page): string {
+  if (page.kind === "home") return "";
+  const trail: Page[] = [];
+  let item = page.parent;
+  while (item) {
+    trail.unshift(item);
+    item = item.parent;
+  }
+  const entries = trail
+    .map((entry, index) => {
+      const label = entry.kind === "home" ? "Home" : entry.title;
+      const separator = index < trail.length - 1 ? `<span class="breadcrumbs__separator" aria-hidden="true">/</span>` : "";
+      return `<li><a href="${escapeHtml(pageUrl(site, entry))}">${escapeHtml(label)}</a>${separator}</li>`;
+    })
+    .join("");
+  return `<nav class="breadcrumbs" aria-label="Breadcrumb"><ol>${entries}</ol></nav>`;
+}
+
 function renderMetadata(site: Site, page: Page): string {
   const values: string[] = [];
   const number = typeof page.attributes.number === "string" ? page.attributes.number : undefined;
   if (number) values.push(escapeHtml(number));
-  if (page.kind === "section") {
-    if (page.parent?.kind === "section") {
-      values.push(`<a href="${escapeHtml(pageUrl(site, page.parent))}">${escapeHtml(page.parent.title)}</a>`);
-    }
-  } else if (page.kind === "page" && page.parent?.kind === "section") {
-    values.push(`<a href="${escapeHtml(pageUrl(site, page.parent))}">${escapeHtml(page.parent.title)}</a>`);
-  }
+  const breadcrumb = renderBreadcrumb(site, page);
+  if (breadcrumb) values.push(breadcrumb);
 
   const updated = formatDate(page.attributes.updated);
   const published = formatDate(page.attributes.date);
@@ -70,7 +83,8 @@ function contentItemMeta(page: Page): string {
 function renderContentList(site: Site, page: Page): string {
   const children = page.children.filter((child) => child.kind === "section" || child.kind === "page");
   if (!children.length) return "";
-  const label = page.kind === "home" ? "Collections" : "Notes";
+  const label =
+    page.kind === "home" ? "Collections" : children.some((child) => child.kind === "section") ? "Contents" : "Notes";
   const items = children
     .map(
       (child) => `<li>

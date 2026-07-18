@@ -155,10 +155,31 @@ a:hover {
   list-style: none;
 }
 
-.page-meta li:not(:last-child)::after {
+.page-meta > li:not(:last-child)::after {
   margin: 0 0.45rem;
   color: var(--faint);
   content: "·";
+}
+
+.breadcrumbs ol {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  flex-wrap: wrap;
+  list-style: none;
+}
+
+.breadcrumbs li {
+  min-width: 0;
+}
+
+.breadcrumbs a {
+  overflow-wrap: anywhere;
+}
+
+.breadcrumbs__separator {
+  margin: 0 0.35rem;
+  color: var(--faint);
 }
 
 .page-header .lede {

@@ -6,6 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { buildSite } from "../src/build.js";
+import { navigationPages } from "../src/content.js";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const fixtureRoot = path.join(repositoryRoot, "tests", "fixtures", "site");
@@ -50,6 +51,8 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   assert.match(homePage, /<img class="site-logo" src="\/docs\/favicon\.svg" alt="" width="28" height="28">/);
   assert.doesNotMatch(homePage, /class="site-mark"/);
   assert.match(firstPage, /This first sentence becomes the automatic summary\./);
+  assert.match(firstPage, /<li>F1<\/li>/);
+  assert.match(sectionPage, /<span class="content-list__meta">F1<\/span>/);
   assert.match(firstPage, /href="\/docs\/foundations\/second\/#second-section"/);
   assert.match(firstPage, /href="\/docs\/_content\/01-foundations\/sample\.txt"/);
   assert.match(firstPage, /class="footnote-ref"/);
@@ -81,7 +84,15 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   assert.match(secondPage, /id="repeat"/);
   assert.match(secondPage, /id="repeat-2"/);
   assert.match(secondPage, /The explicit summary wins over the body\./);
-  assert.doesNotMatch(secondPage, /aria-label="Breadcrumb"/);
+  assert.match(
+    secondPage,
+    /<nav class="breadcrumbs" aria-label="Breadcrumb"><ol><li><a href="\/docs\/">Home<\/a><span class="breadcrumbs__separator" aria-hidden="true">\/<\/span><\/li><li><a href="\/docs\/foundations\/">Foundations<\/a><\/li><\/ol><\/nav>/,
+  );
+  assert.match(
+    sectionPage,
+    /<nav class="breadcrumbs" aria-label="Breadcrumb"><ol><li><a href="\/docs\/">Home<\/a><\/li><\/ol><\/nav>/,
+  );
+  assert.doesNotMatch(homePage, /aria-label="Breadcrumb"/);
   assert.match(secondPage, /<h2 id="page-toc-title">Contents<\/h2>/);
   assert.doesNotMatch(firstPage, /id="page-toc-title"/);
   assert.match(firstPage, /<li><a href="\/docs\/foundations\/">Foundations<\/a><\/li>/);
@@ -101,6 +112,7 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   assert.match(theme, /--interactive: #a54016/);
   assert.match(theme, /--inline-code: #fff0e8/);
   assert.match(theme, /\.site-logo \{/);
+  assert.match(theme, /\.breadcrumbs__separator \{/);
 
   const hashesBefore = await outputHashes(output);
   await buildSite(project);
@@ -180,18 +192,135 @@ test("keeps generated footnote identifiers separate from heading identifiers", a
   assert.equal(new Set(ids).size, ids.length);
 });
 
-test("keeps a parent link on nested section pages", async () => {
+test("supports arbitrarily nested sections, lists, links, and local pagination", async () => {
   const project = await copyFixture();
-  const nested = path.join(project, "content", "01-foundations", "01-nested");
-  await mkdir(nested);
-  await writeFile(
-    path.join(nested, "INDEX.md"),
-    "---\ntitle: Nested section\ndescription: A section inside Foundations.\n---\n\nNested content.\n",
-  );
+  const content = path.join(project, "content");
+  const layerOne = path.join(content, "01-foundations", "03-layer-one");
+  const layerTwo = path.join(layerOne, "02-layer-two");
+  const layerThree = path.join(layerTwo, "01-layer-three");
+  const branch = path.join(layerThree, "02-branch");
+  await mkdir(branch, { recursive: true });
+  await Promise.all([
+    writeFile(
+      path.join(layerOne, "INDEX.md"),
+      "---\ntitle: Layer one\ndescription: First nested section.\nslug: layer-one\norder: 3\n---\n\nFirst layer.\n",
+    ),
+    writeFile(
+      path.join(layerTwo, "INDEX.md"),
+      "---\ntitle: Layer two\ndescription: Second nested section.\nslug: middle\norder: 2\n---\n\nSecond layer.\n",
+    ),
+    writeFile(
+      path.join(layerThree, "INDEX.md"),
+      "---\ntitle: Layer three\ndescription: Third nested section.\nslug: leaf\norder: 1\n---\n\nThird layer.\n",
+    ),
+    writeFile(
+      path.join(branch, "INDEX.md"),
+      "---\ntitle: Side branch\ndescription: A nested sibling between two notes.\norder: 2\n---\n\nAn empty nested section.\n",
+    ),
+    writeFile(
+      path.join(layerThree, "01-alpha.md"),
+      "---\ntitle: Alpha\ndescription: First deeply nested note.\norder: 1\nnumber: D1\n---\n\n- Layer one\n  - Layer two\n    - Layer three\n      - Layer four\n\nRead [Beta](03-beta.md#details), the [parent](../INDEX.md), the [home page](../../../../INDEX.md), and the [local asset](diagram.txt).\n",
+    ),
+    writeFile(
+      path.join(layerThree, "03-beta.md"),
+      "---\ntitle: Beta\ndescription: Second deeply nested note.\norder: 3\nnumber: D2\n---\n\n## Details\n\nThe target fragment is stable.\n",
+    ),
+    writeFile(path.join(layerThree, "diagram.txt"), "deep asset\n"),
+  ]);
 
-  await buildSite(project);
-  const html = await readFile(path.join(project, "site", "foundations", "nested", "index.html"), "utf8");
-  assert.match(html, /<li><a href="\/docs\/foundations\/">Foundations<\/a><\/li>/);
+  const result = await buildSite(project);
+  const one = result.site.pageBySource.get("01-foundations/03-layer-one/INDEX.md");
+  const two = result.site.pageBySource.get("01-foundations/03-layer-one/02-layer-two/INDEX.md");
+  const three = result.site.pageBySource.get("01-foundations/03-layer-one/02-layer-two/01-layer-three/INDEX.md");
+  const sideBranch = result.site.pageBySource.get("01-foundations/03-layer-one/02-layer-two/01-layer-three/02-branch/INDEX.md");
+  const alpha = result.site.pageBySource.get("01-foundations/03-layer-one/02-layer-two/01-layer-three/01-alpha.md");
+  const beta = result.site.pageBySource.get("01-foundations/03-layer-one/02-layer-two/01-layer-three/03-beta.md");
+  assert.ok(one && two && three && sideBranch && alpha && beta);
+  assert.equal(one.parent?.title, "Foundations");
+  assert.equal(two.parent, one);
+  assert.equal(three.parent, two);
+  assert.equal(sideBranch.parent, three);
+  assert.equal(alpha.parent, three);
+  assert.equal(beta.parent, three);
+  assert.equal(alpha.depth, 5);
+  assert.deepEqual(three.children.map((page) => page.title), ["Alpha", "Side branch", "Beta"]);
+  assert.deepEqual(result.site.sections.map((page) => page.title), ["Foundations"]);
+  assert.deepEqual(navigationPages(result.site).slice(-2).map((page) => page.title), ["Alpha", "Beta"]);
+
+  const output = path.join(project, "site");
+  const foundationsHtml = await readFile(path.join(output, "foundations", "index.html"), "utf8");
+  const oneHtml = await readFile(path.join(output, "foundations", "layer-one", "index.html"), "utf8");
+  const twoHtml = await readFile(path.join(output, "foundations", "layer-one", "middle", "index.html"), "utf8");
+  const threeHtml = await readFile(path.join(output, "foundations", "layer-one", "middle", "leaf", "index.html"), "utf8");
+  const alphaHtml = await readFile(path.join(output, "foundations", "layer-one", "middle", "leaf", "alpha", "index.html"), "utf8");
+  const betaHtml = await readFile(path.join(output, "foundations", "layer-one", "middle", "leaf", "beta", "index.html"), "utf8");
+  assert.match(foundationsHtml, /href="\/docs\/foundations\/layer-one\/"/);
+  assert.doesNotMatch(foundationsHtml, /href="\/docs\/foundations\/layer-one\/middle\/"/);
+  assert.match(oneHtml, /<h2 id="content-list-title" class="section-heading">Contents<\/h2>/);
+  assert.match(oneHtml, /href="\/docs\/foundations\/layer-one\/middle\/"/);
+  assert.doesNotMatch(oneHtml, /href="\/docs\/foundations\/layer-one\/middle\/leaf\/"/);
+  assert.match(twoHtml, /href="\/docs\/foundations\/layer-one\/middle\/leaf\/"/);
+  assert.doesNotMatch(twoHtml, /href="\/docs\/foundations\/layer-one\/middle\/leaf\/alpha\/"/);
+  assert.match(threeHtml, /href="\/docs\/foundations\/layer-one\/middle\/leaf\/alpha\/"/);
+  assert.match(threeHtml, /href="\/docs\/foundations\/layer-one\/middle\/leaf\/branch\/"/);
+  assert.match(threeHtml, /href="\/docs\/foundations\/layer-one\/middle\/leaf\/beta\/"/);
+  assert.match(
+    threeHtml,
+    /<nav class="breadcrumbs" aria-label="Breadcrumb"><ol><li><a href="\/docs\/">Home<\/a><span class="breadcrumbs__separator" aria-hidden="true">\/<\/span><\/li><li><a href="\/docs\/foundations\/">Foundations<\/a><span class="breadcrumbs__separator" aria-hidden="true">\/<\/span><\/li><li><a href="\/docs\/foundations\/layer-one\/">Layer one<\/a><span class="breadcrumbs__separator" aria-hidden="true">\/<\/span><\/li><li><a href="\/docs\/foundations\/layer-one\/middle\/">Layer two<\/a><\/li><\/ol><\/nav>/,
+  );
+  assert.match(
+    alphaHtml,
+    /<nav class="breadcrumbs" aria-label="Breadcrumb"><ol><li><a href="\/docs\/">Home<\/a><span class="breadcrumbs__separator" aria-hidden="true">\/<\/span><\/li><li><a href="\/docs\/foundations\/">Foundations<\/a><span class="breadcrumbs__separator" aria-hidden="true">\/<\/span><\/li><li><a href="\/docs\/foundations\/layer-one\/">Layer one<\/a><span class="breadcrumbs__separator" aria-hidden="true">\/<\/span><\/li><li><a href="\/docs\/foundations\/layer-one\/middle\/">Layer two<\/a><span class="breadcrumbs__separator" aria-hidden="true">\/<\/span><\/li><li><a href="\/docs\/foundations\/layer-one\/middle\/leaf\/">Layer three<\/a><\/li><\/ol><\/nav>/,
+  );
+  assert.equal(alphaHtml.match(/aria-label="Breadcrumb"/g)?.length, 1);
+  assert.match(alphaHtml, /<li>Layer one\s*<ul>[\s\S]*<li>Layer four<\/li>/);
+  assert.match(alphaHtml, /href="\/docs\/foundations\/layer-one\/middle\/leaf\/beta\/#details"/);
+  assert.match(alphaHtml, /href="\/docs\/foundations\/layer-one\/middle\/"/);
+  assert.match(alphaHtml, /href="\/docs\/"/);
+  assert.match(alphaHtml, /href="\/docs\/_content\/01-foundations\/03-layer-one\/02-layer-two\/01-layer-three\/diagram\.txt"/);
+  assert.match(alphaHtml, /rel="next" href="\/docs\/foundations\/layer-one\/middle\/leaf\/beta\/"/);
+  assert.match(betaHtml, /rel="prev" href="\/docs\/foundations\/layer-one\/middle\/leaf\/alpha\/"/);
+  assert.equal(
+    await readFile(path.join(output, "_content", "01-foundations", "03-layer-one", "02-layer-two", "01-layer-three", "diagram.txt"), "utf8"),
+    "deep asset\n",
+  );
+});
+
+test("requires INDEX.md for every directory with published Markdown", async (t) => {
+  await t.test("missing intermediate overview", async () => {
+    const project = await copyFixture();
+    const deep = path.join(project, "content", "01-foundations", "03-unindexed", "01-deep");
+    await mkdir(deep, { recursive: true });
+    await writeFile(path.join(deep, "INDEX.md"), "---\ntitle: Deep\n---\n\nVisible content.\n");
+    await assert.rejects(
+      buildSite(project),
+      /01-foundations\/03-unindexed: published Markdown directories need an INDEX\.md/,
+    );
+  });
+
+  await t.test("draft section with a published note", async () => {
+    const project = await copyFixture();
+    const directory = path.join(project, "content", "01-foundations", "03-draft-section");
+    await mkdir(directory);
+    await writeFile(path.join(directory, "INDEX.md"), "---\ntitle: Draft\ndraft: true\n---\n\nHidden overview.\n");
+    await writeFile(path.join(directory, "01-visible.md"), "---\ntitle: Visible\n---\n\nPublished note.\n");
+    await assert.rejects(
+      buildSite(project),
+      /01-foundations\/03-draft-section: published Markdown directories need an INDEX\.md/,
+    );
+  });
+
+  await t.test("asset-only directory", async () => {
+    const project = await copyFixture();
+    const directory = path.join(project, "content", "01-foundations", "assets");
+    await mkdir(directory);
+    await writeFile(path.join(directory, "data.json"), "{}\n");
+    await buildSite(project);
+    assert.equal(
+      await readFile(path.join(project, "site", "_content", "01-foundations", "assets", "data.json"), "utf8"),
+      "{}\n",
+    );
+  });
 });
 
 test("removes footnote syntax from automatic summaries", async (t) => {
