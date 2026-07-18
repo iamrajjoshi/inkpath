@@ -56,7 +56,8 @@ function parseArguments(args: string[]): Arguments | "help" | "version" {
       if (command !== "dev") throw new Error("--port is only valid with inkpath dev");
       const rawPort = readValue(args, index, "--port");
       port = Number(rawPort);
-      if (!Number.isInteger(port) || port < 0 || port > 65_535) throw new Error("--port must be an integer from 0 to 65535");
+      if (!Number.isInteger(port) || port < 0 || port > 65_535)
+        throw new Error("--port must be an integer from 0 to 65535");
       index += 1;
     } else if (value?.startsWith("--")) {
       throw new Error(`unknown option: ${value}`);
@@ -82,7 +83,9 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   }
   if (parsed.command === "dev") {
     if (parsed.host !== "127.0.0.1" && parsed.host !== "localhost" && parsed.host !== "::1") {
-      console.warn(`Inkpath will be reachable from ${parsed.host}; use this only on a trusted network.`);
+      console.warn(
+        `Inkpath will be reachable from ${parsed.host}; use this only on a trusted network.`,
+      );
     }
     await startDevServer(parsed.project, { host: parsed.host, port: parsed.port });
     return;

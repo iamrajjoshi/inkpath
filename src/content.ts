@@ -29,7 +29,9 @@ async function walkMarkdown(directory: string, root = directory): Promise<string
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     const entryPath = path.join(directory, entry.name);
     if (entry.isSymbolicLink()) {
-      throw new Error(`content cannot contain symbolic links: ${toPosix(path.relative(root, entryPath))}`);
+      throw new Error(
+        `content cannot contain symbolic links: ${toPosix(path.relative(root, entryPath))}`,
+      );
     }
     if (entry.name.startsWith(".")) continue;
     if (entry.isDirectory()) {
@@ -42,7 +44,10 @@ async function walkMarkdown(directory: string, root = directory): Promise<string
   return paths;
 }
 
-function parseFrontmatter(raw: string, relativePath: string): { attributes: Frontmatter; body: string } {
+function parseFrontmatter(
+  raw: string,
+  relativePath: string,
+): { attributes: Frontmatter; body: string } {
   if (!raw.startsWith("---\n") && !raw.startsWith("---\r\n")) {
     return { attributes: {}, body: raw.trim() };
   }
@@ -61,10 +66,16 @@ function parseFrontmatter(raw: string, relativePath: string): { attributes: Fron
       throw new Error(`${relativePath}: ${key} must be a non-empty string`);
     }
   }
-  if (attributes.order !== undefined && (!Number.isInteger(attributes.order) || attributes.order < 0)) {
+  if (
+    attributes.order !== undefined &&
+    (!Number.isInteger(attributes.order) || attributes.order < 0)
+  ) {
     throw new Error(`${relativePath}: order must be a non-negative integer`);
   }
-  if (attributes.tags !== undefined && (!Array.isArray(attributes.tags) || attributes.tags.some((tag) => typeof tag !== "string"))) {
+  if (
+    attributes.tags !== undefined &&
+    (!Array.isArray(attributes.tags) || attributes.tags.some((tag) => typeof tag !== "string"))
+  ) {
     throw new Error(`${relativePath}: tags must be a list of strings`);
   }
   if (attributes.draft !== undefined && typeof attributes.draft !== "boolean") {
@@ -204,7 +215,9 @@ function deriveSummary(body: string): string {
 
 function readingMinutes(body: string): number {
   const withoutFences = body.replace(/```[\s\S]*?```|~~~[\s\S]*?~~~/g, " ");
-  const words = plainText(withoutFences, footnoteDefinitionLabels(body)).split(/\s+/).filter(Boolean).length;
+  const words = plainText(withoutFences, footnoteDefinitionLabels(body))
+    .split(/\s+/)
+    .filter(Boolean).length;
   return Math.max(1, Math.ceil(words / 220));
 }
 
@@ -226,7 +239,12 @@ function routeSegmentsForDirectory(
     const sourceDirectory = parts.slice(0, index + 1).join("/");
     const indexDocument = indexByDirectory.get(sourceDirectory);
     const requestedSlug = indexDocument?.attributes.slug;
-    segments.push(validSlug(requestedSlug ?? stripOrderPrefix(parts[index] ?? ""), indexDocument?.relativePath ?? sourceDirectory));
+    segments.push(
+      validSlug(
+        requestedSlug ?? stripOrderPrefix(parts[index] ?? ""),
+        indexDocument?.relativePath ?? sourceDirectory,
+      ),
+    );
   }
 
   return segments;
@@ -276,7 +294,9 @@ export async function loadSite(config: InkpathConfig): Promise<Site> {
     const relativePath = toPosix(relativeFilePath);
     const fileName = path.posix.basename(relativePath);
     if (/^readme\.md$/i.test(fileName)) {
-      throw new Error(`${relativePath}: content overview files must be named INDEX.md, not README.md`);
+      throw new Error(
+        `${relativePath}: content overview files must be named INDEX.md, not README.md`,
+      );
     }
     const parsed = parseFrontmatter(await readFile(sourcePath, "utf8"), relativePath);
     if (parsed.attributes.draft) continue;
@@ -319,19 +339,24 @@ export async function loadSite(config: InkpathConfig): Promise<Site> {
     const isHome = document.isIndex && !document.directory;
     const kind = isHome ? "home" : document.isIndex ? "section" : "page";
     const slug = document.isIndex
-      ? directorySegments.at(-1) ?? ""
+      ? (directorySegments.at(-1) ?? "")
       : validSlug(document.attributes.slug ?? stripOrderPrefix(stem), document.relativePath);
     const route = isHome
       ? "/"
       : normalizeRoute([...directorySegments, ...(document.isIndex ? [] : [slug])].join("/"));
-    const title = document.attributes.title?.trim() || firstHeading(document.body) || titleFromSlug(slug || "home");
+    const title =
+      document.attributes.title?.trim() ||
+      firstHeading(document.body) ||
+      titleFromSlug(slug || "home");
     const body = stripLeadingTitle(document.body);
     const summary =
       document.attributes.summary?.trim() ||
       document.attributes.description?.trim() ||
       deriveSummary(body) ||
       title;
-    const order = document.attributes.order ?? orderFromName(document.isIndex ? document.directory.split("/").at(-1) ?? "" : stem);
+    const order =
+      document.attributes.order ??
+      orderFromName(document.isIndex ? (document.directory.split("/").at(-1) ?? "") : stem);
     const page: Page = {
       attributes: document.attributes,
       body,
@@ -352,7 +377,9 @@ export async function loadSite(config: InkpathConfig): Promise<Site> {
     };
 
     if (pageByRoute.has(route)) {
-      throw new Error(`${document.relativePath}: route ${route} is already owned by ${pageByRoute.get(route)?.relativePath}`);
+      throw new Error(
+        `${document.relativePath}: route ${route} is already owned by ${pageByRoute.get(route)?.relativePath}`,
+      );
     }
     pageByRoute.set(route, page);
     pageBySource.set(document.relativePath, page);
@@ -365,7 +392,8 @@ export async function loadSite(config: InkpathConfig): Promise<Site> {
 
   for (const page of pages) {
     if (page === home) continue;
-    let parentDirectory = page.kind === "page" ? page.sourceDirectory : path.posix.dirname(page.sourceDirectory);
+    let parentDirectory =
+      page.kind === "page" ? page.sourceDirectory : path.posix.dirname(page.sourceDirectory);
     if (parentDirectory === ".") parentDirectory = "";
     let parent = sectionByDirectory.get(parentDirectory);
     while (!parent && parentDirectory) {

@@ -41,7 +41,10 @@ export function safeRequestPath(outputDir: string, requestPath: string): string 
   return target;
 }
 
-export async function safeExistingFilePath(outputDir: string, requestPath: string): Promise<string | undefined> {
+export async function safeExistingFilePath(
+  outputDir: string,
+  requestPath: string,
+): Promise<string | undefined> {
   const target = safeRequestPath(outputDir, requestPath);
   if (!target) return undefined;
 
@@ -100,7 +103,7 @@ export async function startDevServer(projectDirectory: string, options: DevOptio
       }
 
       const basePath = result.site.config.site.basePath;
-      const eventPath = `${basePath}/__inkpath/events` || "/__inkpath/events";
+      const eventPath = `${basePath}/__inkpath/events`;
 
       if (requestPath === eventPath) {
         response.writeHead(200, {
@@ -149,8 +152,11 @@ export async function startDevServer(projectDirectory: string, options: DevOptio
       if (extension === ".html") {
         const chunks: Buffer[] = [];
         const stream = createReadStream(filePath);
-        for await (const chunk of stream) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-        const html = Buffer.concat(chunks).toString("utf8").replace("</body>", `${reloadScript(eventPath)}</body>`);
+        for await (const chunk of stream)
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        const html = Buffer.concat(chunks)
+          .toString("utf8")
+          .replace("</body>", `${reloadScript(eventPath)}</body>`);
         response.end(html);
       } else {
         createReadStream(filePath).pipe(response);
@@ -170,7 +176,11 @@ export async function startDevServer(projectDirectory: string, options: DevOptio
 
   let timer: NodeJS.Timeout | undefined;
   const watcher = watch(
-    [result.site.config.contentDir, result.site.config.publicDir, path.join(result.site.config.projectRoot, "inkpath.yaml")],
+    [
+      result.site.config.contentDir,
+      result.site.config.publicDir,
+      path.join(result.site.config.projectRoot, "inkpath.yaml"),
+    ],
     { followSymlinks: false, ignoreInitial: true },
   );
   watcher.on("all", () => {

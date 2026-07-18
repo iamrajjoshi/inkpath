@@ -42,7 +42,9 @@ function installAnnotations(markdown: MarkdownIt, environment: RenderEnvironment
         continue;
       }
 
-      const marker = content.content.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*(?:\n|$)/);
+      const marker = content.content.match(
+        /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*(?:\n|$)/,
+      );
       if (!marker) continue;
 
       let depth = 0;
@@ -132,21 +134,30 @@ function rewriteReference(reference: string, environment: RenderEnvironment): st
   } catch {
     throw new Error(`${environment.page.relativePath}: malformed URL ${reference}`);
   }
-  const resolved = toPosix(path.posix.normalize(path.posix.join(environment.page.sourceDirectory, decodedPath)));
+  const resolved = toPosix(
+    path.posix.normalize(path.posix.join(environment.page.sourceDirectory, decodedPath)),
+  );
   if (resolved.startsWith("../") || resolved === "..") {
-    throw new Error(`${environment.page.relativePath}: link leaves the content directory: ${reference}`);
+    throw new Error(
+      `${environment.page.relativePath}: link leaves the content directory: ${reference}`,
+    );
   }
 
   if (/\.md$/i.test(decodedPath)) {
     const target = environment.site.pageBySource.get(resolved);
-    if (!target) throw new Error(`${environment.page.relativePath}: missing Markdown link target ${reference}`);
+    if (!target)
+      throw new Error(
+        `${environment.page.relativePath}: missing Markdown link target ${reference}`,
+      );
     const fragment = suffix.match(/#([^#]+)$/)?.[1];
     environment.internalReferences.push(fragment ? { fragment, target } : { target });
     return `${siteUrl(environment.site.config.site.basePath, target.route)}${suffix}`;
   }
 
   if (resolved.split("/").some((segment) => segment.startsWith("."))) {
-    throw new Error(`${environment.page.relativePath}: hidden local assets are not supported: ${reference}`);
+    throw new Error(
+      `${environment.page.relativePath}: hidden local assets are not supported: ${reference}`,
+    );
   }
   environment.assets.add(resolved);
   return `${contentAssetUrl(environment.site, resolved)}${suffix}`;
@@ -157,7 +168,9 @@ function validateMermaid(source: string, page: Page): void {
     throw new Error(`${page.relativePath}: Mermaid diagram exceeds the 40,000 character limit`);
   }
   if (!/^\s*accTitle\s*:/m.test(source) || !/^\s*accDescr\s*(?::|\{)/m.test(source)) {
-    throw new Error(`${page.relativePath}: Mermaid diagrams need accTitle and accDescr for accessibility`);
+    throw new Error(
+      `${page.relativePath}: Mermaid diagrams need accTitle and accDescr for accessibility`,
+    );
   }
   if (/^\s*click\s+/m.test(source)) {
     throw new Error(`${page.relativePath}: Mermaid click directives are not supported`);
@@ -224,8 +237,7 @@ function createMarkdown(environment: RenderEnvironment): MarkdownIt {
     }
   });
 
-  const defaultFence = markdown.renderer.rules.fence;
-  markdown.renderer.rules.fence = (tokens, index, options, env, renderer) => {
+  markdown.renderer.rules.fence = (tokens, index) => {
     const token = tokens[index];
     if (!token) return "";
     const language = token.info.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
@@ -251,7 +263,9 @@ function createMarkdown(environment: RenderEnvironment): MarkdownIt {
     const token = tokens[index];
     const href = token?.attrGet("href");
     if (token && href) token.attrSet("href", rewriteReference(href, environment));
-    return defaultLinkOpen ? defaultLinkOpen(tokens, index, options, env, renderer) : renderer.renderToken(tokens, index, options);
+    return defaultLinkOpen
+      ? defaultLinkOpen(tokens, index, options, env, renderer)
+      : renderer.renderToken(tokens, index, options);
   };
 
   const defaultImage = markdown.renderer.rules.image;
@@ -263,14 +277,18 @@ function createMarkdown(environment: RenderEnvironment): MarkdownIt {
       token.attrSet("loading", "lazy");
       token.attrSet("decoding", "async");
     }
-    return defaultImage ? defaultImage(tokens, index, options, env, renderer) : renderer.renderToken(tokens, index, options);
+    return defaultImage
+      ? defaultImage(tokens, index, options, env, renderer)
+      : renderer.renderToken(tokens, index, options);
   };
 
-  if (defaultFence) void defaultFence;
   return markdown;
 }
 
-export function renderMarkdown(page: Page, site: Site): {
+export function renderMarkdown(
+  page: Page,
+  site: Site,
+): {
   anchors: Set<string>;
   assets: Set<string>;
   diagrams: number;

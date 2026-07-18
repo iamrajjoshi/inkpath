@@ -7,7 +7,9 @@ import { promisify } from "node:util";
 
 const execute = promisify(execFile);
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
-const packageMetadata = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8"));
+const packageMetadata = JSON.parse(
+  await readFile(path.join(repositoryRoot, "package.json"), "utf8"),
+);
 const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "inkpath-package-"));
 
 try {
@@ -34,7 +36,12 @@ try {
     env: { ...process.env, npm_config_loglevel: "error" },
   });
 
-  const binary = path.join(project, "node_modules", ".bin", process.platform === "win32" ? "inkpath.cmd" : "inkpath");
+  const binary = path.join(
+    project,
+    "node_modules",
+    ".bin",
+    process.platform === "win32" ? "inkpath.cmd" : "inkpath",
+  );
   const version = await execute(binary, ["--version"], { cwd: project });
   assert.equal(version.stdout.trim(), packageMetadata.version);
 

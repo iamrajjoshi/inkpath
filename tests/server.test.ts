@@ -9,7 +9,10 @@ test("static path resolution stays inside the generated site", () => {
   const output = path.resolve("/tmp/inkpath-output");
   assert.equal(safeRequestPath(output, "/"), path.join(output, "index.html"));
   assert.equal(safeRequestPath(output, "/guide/"), path.join(output, "guide", "index.html"));
-  assert.equal(safeRequestPath(output, "/_inkpath/theme.css"), path.join(output, "_inkpath", "theme.css"));
+  assert.equal(
+    safeRequestPath(output, "/_inkpath/theme.css"),
+    path.join(output, "_inkpath", "theme.css"),
+  );
   assert.equal(safeRequestPath(output, "/../secret"), undefined);
   assert.equal(safeRequestPath(output, "/.git/config"), undefined);
   assert.equal(safeRequestPath(output, "/guide/.hidden"), undefined);
@@ -23,6 +26,9 @@ test("serving rejects symbolic links even when their targets are regular files",
   await writeFile(path.join(root, "outside.txt"), "secret");
   await symlink(path.join(root, "outside.txt"), path.join(output, "leak.txt"));
 
-  assert.equal(await safeExistingFilePath(output, "/"), await realpath(path.join(output, "index.html")));
+  assert.equal(
+    await safeExistingFilePath(output, "/"),
+    await realpath(path.join(output, "index.html")),
+  );
   assert.equal(await safeExistingFilePath(output, "/leak.txt"), undefined);
 });

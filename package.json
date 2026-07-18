@@ -2,35 +2,31 @@
   "name": "@iamrajjoshi/inkpath",
   "version": "0.1.0",
   "description": "Build static notes and documentation sites from Markdown.",
-  "type": "module",
-  "license": "MIT",
-  "author": "Raj Joshi",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/iamrajjoshi/inkpath.git"
-  },
-  "homepage": "https://github.com/iamrajjoshi/inkpath#readme",
-  "bugs": {
-    "url": "https://github.com/iamrajjoshi/inkpath/issues"
-  },
   "keywords": [
     "documentation",
     "markdown",
     "notes",
     "static-site-generator"
   ],
-  "packageManager": "pnpm@10.25.0",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
+  "homepage": "https://github.com/iamrajjoshi/inkpath#readme",
+  "bugs": {
+    "url": "https://github.com/iamrajjoshi/inkpath/issues"
   },
-  "engines": {
-    "node": ">=22.13.0"
+  "license": "MIT",
+  "author": "Raj Joshi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iamrajjoshi/inkpath.git"
   },
   "bin": {
     "inkpath": "dist/cli.js"
   },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "type": "module",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
@@ -38,25 +34,23 @@
       "import": "./dist/index.js"
     }
   },
-  "files": [
-    "dist",
-    "LICENSE",
-    "README.md"
-  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "check": "tsx src/cli.ts check examples/basic",
     "dev": "tsx src/cli.ts dev examples/basic",
     "example:build": "tsx src/cli.ts build examples/basic",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint src tests scripts",
     "package:check": "node scripts/package-check.mjs",
     "prepare": "tsc -p tsconfig.build.json",
     "prepublishOnly": "pnpm verify",
     "test": "pnpm build && node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "verify": "pnpm typecheck && pnpm test && pnpm check && pnpm example:build"
-  },
-  "publishConfig": {
-    "access": "public"
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm check && pnpm example:build"
   },
   "dependencies": {
     "chokidar": "5.0.0",
@@ -70,8 +64,20 @@
   "devDependencies": {
     "@types/markdown-it": "14.1.2",
     "@types/markdown-it-footnote": "3.0.4",
-    "@types/node": "22.19.19",
+    "@types/node": "22.20.1",
+    "oxfmt": "0.59.0",
+    "oxlint": "1.74.0",
+    "oxlint-tsgolint": "0.25.0",
     "tsx": "4.23.1",
-    "typescript": "5.9.3"
+    "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "packageManager": "pnpm@10.25.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

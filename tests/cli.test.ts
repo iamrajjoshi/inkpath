@@ -17,7 +17,9 @@ test("the compiled CLI runs when invoked through a package-manager bin symlink",
   await cp(path.join(repositoryRoot, "tests", "fixtures", "site"), project, { recursive: true });
   await symlink(path.join(repositoryRoot, "dist", "cli.js"), bin);
 
-  const packageMetadata = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8")) as {
+  const packageMetadata = JSON.parse(
+    await readFile(path.join(repositoryRoot, "package.json"), "utf8"),
+  ) as {
     version: string;
   };
   const version = await execute(process.execPath, [bin, "--version"]);

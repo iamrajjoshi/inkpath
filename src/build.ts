@@ -1,5 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { access, cp, lstat, mkdir, mkdtemp, readdir, rename, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
@@ -26,7 +36,10 @@ async function exists(target: string): Promise<boolean> {
   }
 }
 
-async function validateAssets(config: InkpathConfig, renders: Map<Page, PageRender>): Promise<void> {
+async function validateAssets(
+  config: InkpathConfig,
+  renders: Map<Page, PageRender>,
+): Promise<void> {
   for (const [page, render] of renders) {
     for (const asset of render.assets) {
       const absolutePath = path.resolve(config.contentDir, asset);
@@ -53,13 +66,19 @@ function validateAnchors(renders: Map<Page, PageRender>): void {
       }
       const targetRender = renders.get(reference.target);
       if (!targetRender?.anchors.has(fragment)) {
-        throw new Error(`${page.relativePath}: missing anchor #${fragment} in ${reference.target.relativePath}`);
+        throw new Error(
+          `${page.relativePath}: missing anchor #${fragment} in ${reference.target.relativePath}`,
+        );
       }
     }
   }
 }
 
-async function copyDirectory(source: string, destination: string, skipMarkdown: boolean): Promise<void> {
+async function copyDirectory(
+  source: string,
+  destination: string,
+  skipMarkdown: boolean,
+): Promise<void> {
   const entries = await readdir(source, { withFileTypes: true });
   for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
     if (entry.name.startsWith(".")) continue;
@@ -83,7 +102,8 @@ async function validatePublicDirectory(publicDir: string): Promise<void> {
     const entries = await readdir(directory, { withFileTypes: true });
     for (const entry of entries) {
       const entryPath = path.join(directory, entry.name);
-      if (entry.isSymbolicLink()) throw new Error(`public cannot contain symbolic links: ${entryPath}`);
+      if (entry.isSymbolicLink())
+        throw new Error(`public cannot contain symbolic links: ${entryPath}`);
       if (entry.isDirectory()) await inspect(entryPath);
     }
   };
@@ -142,7 +162,11 @@ async function writeOutput(
   try {
     if (await exists(config.publicDir)) await copyDirectory(config.publicDir, stage, false);
     await mkdir(path.join(stage, "_inkpath"), { recursive: true });
-    await writeFile(path.join(stage, "_inkpath", "theme.css"), renderThemeCss(config.theme).trimStart(), "utf8");
+    await writeFile(
+      path.join(stage, "_inkpath", "theme.css"),
+      renderThemeCss(config.theme).trimStart(),
+      "utf8",
+    );
 
     const contentAssets = path.join(stage, "_content");
     await mkdir(contentAssets, { recursive: true });
@@ -167,7 +191,8 @@ async function writeOutput(
     try {
       await rename(stage, config.outputDir);
     } catch (error) {
-      if (movedPrevious && !(await exists(config.outputDir))) await rename(previous, config.outputDir);
+      if (movedPrevious && !(await exists(config.outputDir)))
+        await rename(previous, config.outputDir);
       throw error;
     }
     if (movedPrevious) await rm(previous, { recursive: true, force: true });
@@ -177,7 +202,10 @@ async function writeOutput(
   }
 }
 
-export async function buildSite(projectDirectory = ".", options: BuildOptions = {}): Promise<BuildResult> {
+export async function buildSite(
+  projectDirectory = ".",
+  options: BuildOptions = {},
+): Promise<BuildResult> {
   const started = performance.now();
   const config = await loadConfig(projectDirectory);
   await validatePublicDirectory(config.publicDir);

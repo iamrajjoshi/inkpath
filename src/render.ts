@@ -30,7 +30,10 @@ function renderBreadcrumb(site: Site, page: Page): string {
   const entries = trail
     .map((entry, index) => {
       const label = entry.kind === "home" ? "Home" : entry.title;
-      const separator = index < trail.length - 1 ? `<span class="breadcrumbs__separator" aria-hidden="true">/</span>` : "";
+      const separator =
+        index < trail.length - 1
+          ? `<span class="breadcrumbs__separator" aria-hidden="true">/</span>`
+          : "";
       return `<li><a href="${escapeHtml(pageUrl(site, entry))}">${escapeHtml(label)}</a>${separator}</li>`;
     })
     .join("");
@@ -78,11 +81,15 @@ function renderToc(page: Page): string {
 function contentItemMeta(page: Page): string {
   const values: string[] = [];
   if (typeof page.attributes.number === "string") values.push(page.attributes.number);
-  return values.length ? `<span class="content-list__meta">${escapeHtml(values.join(" · "))}</span>` : "";
+  return values.length
+    ? `<span class="content-list__meta">${escapeHtml(values.join(" · "))}</span>`
+    : "";
 }
 
 function renderContentList(site: Site, page: Page): string {
-  const children = page.children.filter((child) => child.kind === "section" || child.kind === "page");
+  const children = page.children.filter(
+    (child) => child.kind === "section" || child.kind === "page",
+  );
   if (!children.length) return "";
   const label = page.kind === "home" ? "Collections" : "Notes";
   const items = children

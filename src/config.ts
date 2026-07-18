@@ -32,7 +32,11 @@ async function exists(filePath: string): Promise<boolean> {
   }
 }
 
-async function resolveProjectDirectory(projectRoot: string, target: string, label: string): Promise<string> {
+async function resolveProjectDirectory(
+  projectRoot: string,
+  target: string,
+  label: string,
+): Promise<string> {
   const parts = path.relative(projectRoot, target).split(path.sep).filter(Boolean);
   let cursor = projectRoot;
 
@@ -40,7 +44,8 @@ async function resolveProjectDirectory(projectRoot: string, target: string, labe
     const candidate = path.join(cursor, parts[index] ?? "");
     try {
       const info = await lstat(candidate);
-      if (info.isSymbolicLink()) throw new Error(`${label} cannot be or pass through a symbolic link`);
+      if (info.isSymbolicLink())
+        throw new Error(`${label} cannot be or pass through a symbolic link`);
       if (!info.isDirectory()) throw new Error(`${label} must be or pass through directories`);
       const resolved = await realpath(candidate);
       if (!isPathWithin(projectRoot, resolved)) {
@@ -141,7 +146,10 @@ export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig>
       throw new Error(`site.logo must be a regular file in public: ${logo}`);
     }
   }
-  if (raw.theme !== undefined && (typeof raw.theme !== "object" || raw.theme === null || Array.isArray(raw.theme))) {
+  if (
+    raw.theme !== undefined &&
+    (typeof raw.theme !== "object" || raw.theme === null || Array.isArray(raw.theme))
+  ) {
     throw new Error("theme must be a YAML mapping");
   }
   const theme = raw.theme ?? {};
