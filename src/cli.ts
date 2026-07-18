@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { buildSite } from "./build.js";
 import { startDevServer } from "./server.js";
+import { INKPATH_VERSION } from "./version.js";
 
-const help = `Inkpath 0.1.0
+const help = `Inkpath ${INKPATH_VERSION}
 
 Build small documentation and notes sites from Markdown.
 
@@ -76,7 +77,7 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
     return;
   }
   if (parsed === "version") {
-    console.log("0.1.0");
+    console.log(INKPATH_VERSION);
     return;
   }
   if (parsed.command === "dev") {

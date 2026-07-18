@@ -1,7 +1,7 @@
 {
   "name": "@iamrajjoshi/inkpath",
   "version": "0.1.0",
-  "description": "A small Markdown-first static site generator for notes and documentation.",
+  "description": "Build static notes and documentation sites from Markdown.",
   "type": "module",
   "license": "MIT",
   "author": "Raj Joshi",
@@ -31,6 +31,7 @@
   "bin": {
     "inkpath": "dist/cli.js"
   },
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -47,10 +48,15 @@
     "check": "tsx src/cli.ts check examples/basic",
     "dev": "tsx src/cli.ts dev examples/basic",
     "example:build": "tsx src/cli.ts build examples/basic",
-    "prepare": "npm run build",
+    "package:check": "node scripts/package-check.mjs",
+    "prepare": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "pnpm verify",
     "test": "pnpm build && node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "verify": "pnpm typecheck && pnpm test && pnpm check && pnpm example:build"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "chokidar": "5.0.0",

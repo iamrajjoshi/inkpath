@@ -7,6 +7,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { buildSite } from "../src/build.js";
 import { navigationPages } from "../src/content.js";
+import { INKPATH_VERSION } from "../src/version.js";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const fixtureRoot = path.join(repositoryRoot, "tests", "fixtures", "site");
@@ -47,6 +48,7 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   const homePage = await readFile(path.join(output, "index.html"), "utf8");
 
   assert.match(homePage, /Fixture notes/);
+  assert.match(homePage, new RegExp(`<meta name="generator" content="Inkpath ${INKPATH_VERSION.replaceAll(".", "\\.")}">`));
   assert.match(homePage, /Small examples of the supported Markdown surface/);
   assert.match(homePage, /<img class="site-logo" src="\/docs\/favicon\.svg" alt="" width="28" height="28">/);
   assert.doesNotMatch(homePage, /class="site-mark"/);

@@ -1,5 +1,6 @@
 import type { Page, Site } from "./types.js";
 import { escapeHtml, formatDate, siteUrl } from "./utils.js";
+import { INKPATH_VERSION } from "./version.js";
 
 function pageUrl(site: Site, page: Page): string {
   return siteUrl(site.config.site.basePath, page.route);
@@ -145,7 +146,7 @@ export function renderDocument(site: Site, page: Page, diagrams: number): string
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(title)}</title>
   <meta name="description" content="${escapeHtml(description)}">
-  <meta name="generator" content="Inkpath 0.1.0">
+  <meta name="generator" content="Inkpath ${escapeHtml(INKPATH_VERSION)}">
   ${canonical ? `<link rel="canonical" href="${escapeHtml(canonical)}">` : ""}
   <link rel="icon" href="${escapeHtml(`${site.config.site.basePath}/favicon.svg`)}" type="image/svg+xml">
   <link rel="stylesheet" href="${escapeHtml(`${site.config.site.basePath}/_inkpath/theme.css`)}">

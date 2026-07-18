@@ -1,140 +1,128 @@
 # Inkpath
 
-Inkpath turns a directory of Markdown files into a small static notes or documentation site. It has one layout, one stylesheet, and no framework code in the generated pages.
+Inkpath builds static notes and documentation sites from Markdown. It writes plain HTML and CSS and serves a live preview while you edit. Built pages use browser JavaScript only when they contain a Mermaid diagram.
 
-Inkpath is a standalone package. A site keeps its own Markdown and adds Inkpath as a dependency; the generator does not own or copy that content back into this repository.
+## Install
 
-## Use it
+Inkpath requires Node.js 22.13 or newer.
 
 ```bash
-pnpm install
-pnpm dev
+pnpm add -D @iamrajjoshi/inkpath
 ```
 
-That command runs the sanitized site in `examples/basic/` at `http://127.0.0.1:3000` and reloads after a successful rebuild.
+## Create a site
 
-To use Inkpath from another pnpm project before an npm release:
+Add a `content/INDEX.md` file:
+
+```md
+---
+title: Engineering notes
+description: Notes about systems and software.
+---
+
+Write the home page here.
+```
+
+Start the development server:
 
 ```bash
-pnpm add github:iamrajjoshi/inkpath#<commit-sha>
 pnpm exec inkpath dev
 ```
 
-Pin an exact commit so builds stay reproducible. While the GitHub repository is private, installs and deployment jobs also need GitHub credentials with read access.
+Open `http://127.0.0.1:3000`. Saving Markdown, configuration, or files under `public/` rebuilds the site and refreshes the page.
 
-The project using Inkpath supplies `content/`, `public/`, and an optional `inkpath.yaml`.
+Other commands:
 
 ```bash
-pnpm exec inkpath check       # parse and validate without writing
-pnpm exec inkpath build       # write the static site to site/
-pnpm exec inkpath dev         # build, serve, watch, and live reload
+pnpm exec inkpath check   # validate without writing output
+pnpm exec inkpath build   # write the static site to site/
+pnpm exec inkpath --help
+pnpm exec inkpath --version
 ```
 
-The generated `site/` directory can be served by any static file host.
+## Content
 
-## Content layout
-
-Inkpath uses the filesystem as the navigation tree.
+Inkpath uses directories as navigation:
 
 ```text
 content/
 ├── INDEX.md
-├── 01-cloud-infrastructure/
+├── 01-infrastructure/
 │   ├── INDEX.md
-│   ├── 01-cloud-foundations.md
+│   ├── 01-containers.md
 │   └── 02-kubernetes/
 │       ├── INDEX.md
 │       └── 01-networking.md
 └── 02-system-design/
     ├── INDEX.md
-    └── 01-frame-the-problem.md
+    └── 01-requirements.md
 ```
 
-- The root `INDEX.md` is the home page.
-- A directory `INDEX.md` is the section overview. Sections can nest to any practical filesystem depth.
-- Every directory containing published Markdown, including through a descendant directory, needs its own `INDEX.md`. Asset-only directories do not.
-- The home page labels its immediate children `Collections`; every section labels its immediate children `Notes`.
-- Each section lists only its immediate children. Previous and next links stay within direct note siblings and never cross a section boundary.
-- Every non-home header links all ancestors from Home through the immediate parent as a compact breadcrumb; the heading names the current page.
-- Other Markdown files are notes.
-- A numeric filename prefix supplies the default order and is omitted from the URL.
-- Frontmatter `order` and `slug` override those defaults.
-- Section and note lists, compact page details, previous/next links, and a contents list for notes with at least three headings are generated from those files.
+- The root `INDEX.md` becomes the home page.
+- Each Markdown-bearing directory needs an `INDEX.md` overview. Asset-only directories don't.
+- Sections can nest to any practical filesystem depth.
+- Numeric filename prefixes set the default order and stay out of generated URLs.
+- `order` and `slug` frontmatter override those defaults.
+- The home page lists Collections. Section pages list Notes.
 
-If a build reports that a published Markdown directory needs an `INDEX.md`, add an overview to the named directory or move its Markdown under an indexed section. Inkpath enforces this so the visible navigation tree and URL tree cannot silently diverge.
-
-Minimal frontmatter:
+Each page accepts frontmatter:
 
 ```yaml
 ---
 title: Storage engines
-description: How pages, logs, indexes, and compaction shape database behavior.
+description: How logs, pages, indexes, and compaction shape a database.
 order: 3
+number: DB3
+slug: storage-engines
 ---
 ```
 
-Supported presentation metadata includes `number`, `date`, and `updated`. `number` is an optional display label copied verbatim from frontmatter; it is not generated and does not control ordering. Other fields, including `duration`, `difficulty`, and `tags`, are validated or preserved for sites that want to use them later.
+`title`, `description`, `summary`, `order`, `number`, `slug`, `date`, `updated`, `duration`, `difficulty`, `tags`, and `draft` are supported. A numeric filename or `order` controls navigation; `number` is display text only.
 
-If `description` and `summary` are absent, Inkpath uses the first prose sentence as the page summary. This is deterministic; it does not call a model or a network service.
+Relative links use source filenames. Inkpath rewrites them to generated routes and rejects missing pages, headings, images, or files.
 
 ## Markdown
 
-Inkpath supports headings, links, images, tables, blockquotes, nested lists, fenced code, syntax highlighting, footnotes, and block annotations. Markdown lists can nest to any practical document depth.
+Inkpath renders headings, tables, nested lists, language-colored code blocks, footnotes, annotations, and Mermaid diagrams. Raw HTML and MDX aren't executed.
+
+Footnotes can be named or inline:
 
 ```md
-A write is not durable merely because the API returned.[^durability]
+A successful response isn't proof of durable storage.[^durability]
 
-[^durability]: Define the exact persistence boundary promised by the system.
+[^durability]: Name the persistence boundary promised by the API.
+
+Retries need an operation identity.^[One action can span several requests.]
 ```
 
-Short footnotes can stay inline in the source. Both forms render in the same numbered footnotes section.
-
-```md
-The retry budget belongs to the operation.^[One user action can span several network attempts.]
-```
-
-### Annotations
-
-Use a block annotation when context should remain beside the main text. The syntax is compatible with GitHub Markdown.
+Annotations use GitHub-style markers:
 
 ```md
 > [!NOTE]
 > Replication improves availability, not correctness by itself.
 
 > [!WARNING]
-> Retrying a non-idempotent write can duplicate the operation.
+> Retrying a non-idempotent write can duplicate it.
 ```
 
-`NOTE`, `TIP`, `IMPORTANT`, `WARNING`, and `CAUTION` are supported. They render as simple labeled asides without JavaScript; malformed or lowercase markers remain ordinary blockquotes.
-
-Relative links to other notes use their source filenames. Inkpath rewrites them to the generated routes and fails the build when the target or fragment does not exist.
-
-```md
-[Read the storage note](../03-system-design/03-storage-data-modeling.md#write-ahead-logs)
-```
-
-Relative images and files are copied from `content/` and checked during the build. Raw HTML and MDX are intentionally not executed.
-
-### Mermaid
-
-Use a `mermaid` fence. Every diagram needs Mermaid's accessible title and description fields.
+Mermaid diagrams need an accessible title and description:
 
 ````md
 ```mermaid
 flowchart LR
   accTitle: Request path
-  accDescr: A request moves from the client through a load balancer to an application and database.
+  accDescr: A request moves through a load balancer to an application and database.
   client[Client] --> loadBalancer[Load balancer]
   loadBalancer --> app[Application]
   app --> database[(Database)]
 ```
 ````
 
-Mermaid is bundled locally only when at least one page needs it. It runs with strict security settings. If rendering fails, the escaped diagram source remains readable.
+Mermaid ships locally and runs with strict security settings. If rendering fails, the escaped diagram source remains readable.
 
 ## Configuration
 
-`inkpath.yaml` is optional.
+`inkpath.yaml` is optional:
 
 ```yaml
 content: content
@@ -155,27 +143,20 @@ theme:
   subtle: "#f0fdfa"
 ```
 
-`basePath` prefixes every generated link and asset. The output, content, and public directories must remain inside the project root.
+Paths must stay inside the project. `site.logo` points to a regular file under `public/`. `basePath` prefixes generated links and assets.
 
-`site.logo` is an optional path inside `public`. When present, Inkpath places the image beside the site title and treats it as decorative because the title already names the home link. Without it, the default three-line mark remains. The path is validated during every build and respects `basePath`.
+## Build behavior
 
-The optional theme values change the site mark and annotation border (`accent`), link underlines and focus rings (`interactive`), and inline-code or annotation background (`subtle`). Colors must use six-digit hexadecimal notation. The default palette remains unchanged when `theme` is omitted.
+Inkpath parses all Markdown before it replaces the output directory. A failed build leaves the last successful site in place. Generated pages contain no framework runtime, search service, analytics, or database.
 
-## Deliberate limits
-
-Inkpath has no plugin API, template language, theme-selection system, search index, MDX runtime, deployment adapter, analytics, or database. It ships one content-first theme based on a narrow reading column, system fonts, and simple typographic navigation. A full rebuild is the correctness baseline. The development server binds to loopback unless another host is passed explicitly.
-
-The build stages are kept separate: discover and parse content, derive routes, validate links and assets, render HTML, then atomically replace the previous output. A failed build leaves the last successful site in place.
+The development server listens on loopback by default. Passing another `--host` exposes it to that network.
 
 ## Development
 
 ```bash
-pnpm typecheck
-pnpm test
-pnpm check
-pnpm build
-pnpm example:build
+pnpm install
 pnpm verify
+pnpm package:check
 ```
 
-The tests cover route ordering, summaries, annotations, footnotes, code escaping and highlighting, Mermaid accessibility and security, broken links and assets, base paths, deterministic output, and traversal-safe serving.
+`pnpm verify` runs type checking, tests, content validation, and the example build. `pnpm package:check` packs Inkpath, installs the archive in a temporary project, runs the CLI, builds a site, and imports the library API.

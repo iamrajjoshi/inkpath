@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Check the release tag
+        run: |
+          package_version="$(node -p "require('./package.json').version")"
+          test "${GITHUB_REF_NAME}" = "v${package_version}"
+
+      - run: pnpm verify
+      - run: pnpm package:check
+
+      - name: Publish to npm
+        run: |
+          package_name="$(node -p "require('./package.json').name")"
+          package_version="$(node -p "require('./package.json').version")"
+          if npm view "${package_name}@${package_version}" version >/dev/null 2>&1; then
+            echo "${package_name}@${package_version} is already published."
+          else
+            npm publish
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Download the published archive
+        run: |
+          mkdir -p release
+          package_name="$(node -p "require('./package.json').name")"
+          package_version="$(node -p "require('./package.json').version")"
+          archive="release/iamrajjoshi-inkpath-${package_version}.tgz"
+          for attempt in 1 2 3 4 5 6; do
+            archive_url="$(npm view "${package_name}@${package_version}" dist.tarball 2>/dev/null || true)"
+            if [ -n "${archive_url}" ] && curl -fsSL "${archive_url}" -o "${archive}"; then
+              break
+            fi
+            if [ "${attempt}" = "6" ]; then
+              exit 1
+            fi
+            sleep 5
+          done
+          shasum -a 256 release/*.tgz > release/checksums.txt
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" release/*.tgz release/checksums.txt --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" release/*.tgz release/checksums.txt \
+              --title "${GITHUB_REF_NAME}" \
+              --generate-notes
+          fi
