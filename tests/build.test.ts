@@ -117,8 +117,9 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   assert.match(theme, /--inline-code: #fff0e8/);
   assert.match(theme, /\.site-logo \{/);
   assert.match(theme, /\.breadcrumbs__separator \{/);
-  assert.match(theme, /\.content-list a:hover \.content-list__title-text,[\s\S]*background-color: var\(--accent-soft\)/);
-  assert.doesNotMatch(theme, /\.content-list__title-text \{[^}]*text-decoration-line/);
+  assert.match(theme, /\.site-brand:hover \.site-title,[\s\S]*background-color: var\(--accent-soft\)/);
+  assert.match(theme, /\.content-list__title-text \{[^}]*text-decoration-line: underline/);
+  assert.doesNotMatch(theme, /\.content-list a:hover \.content-list__title-text[^}]*background-color/);
 
   const hashesBefore = await outputHashes(output);
   await buildSite(project);

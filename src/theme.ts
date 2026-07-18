@@ -85,8 +85,9 @@ a:hover {
   text-decoration: none;
 }
 
-.site-brand:hover .site-title {
-  background: var(--inline-code);
+.site-brand:hover .site-title,
+.site-brand:focus-visible .site-title {
+  background-color: var(--accent-soft);
 }
 
 .site-logo {
@@ -119,9 +120,12 @@ a:hover {
 }
 
 .site-title {
+  margin: -0.08em -0.18em;
+  padding: 0.08em 0.18em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: background-color 120ms ease;
 }
 
 .page-shell {
@@ -484,16 +488,14 @@ a:hover {
 }
 
 .content-list__title-text {
-  margin: -0.08em -0.18em;
-  padding: 0.08em 0.18em;
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
-  transition: background-color 120ms ease;
+  text-decoration-line: underline;
+  text-decoration-color: var(--interactive);
+  text-decoration-thickness: 0.13em;
+  text-underline-offset: 0.12em;
 }
 
-.content-list a:hover .content-list__title-text,
-.content-list a:focus-visible .content-list__title-text {
-  background-color: var(--accent-soft);
+.content-list a:hover .content-list__title-text {
+  text-decoration-thickness: 0.18em;
 }
 
 .content-list__summary {
@@ -568,7 +570,7 @@ a:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .content-list__title-text {
+  .site-title {
     transition: none;
   }
 }
