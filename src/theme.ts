@@ -493,16 +493,6 @@ a:hover {
   border-top: 1px solid var(--line);
 }
 
-.page-source {
-  margin: 0 0 1.25rem;
-  color: var(--faint);
-  font-size: 0.75rem;
-}
-
-.page-source code {
-  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
-}
-
 .page-pagination {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -3,5 +3,4 @@ output: site
 public: public
 site:
   basePath: /docs
-  sourceUrl: https://example.com/source
   logo: favicon.svg

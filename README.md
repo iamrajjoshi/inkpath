@@ -139,7 +139,6 @@ site:
   lang: en
   basePath: /notes
   url: https://example.com
-  sourceUrl: https://github.com/me/notes/blob/main/content
   logo: favicon.svg
 
 theme:

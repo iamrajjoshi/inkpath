@@ -42,6 +42,7 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   const output = path.join(project, "site");
   const firstPage = await readFile(path.join(output, "foundations", "first", "index.html"), "utf8");
   const secondPage = await readFile(path.join(output, "foundations", "second", "index.html"), "utf8");
+  const sectionPage = await readFile(path.join(output, "foundations", "index.html"), "utf8");
   const homePage = await readFile(path.join(output, "index.html"), "utf8");
 
   assert.match(homePage, /Fixture notes/);
@@ -85,6 +86,12 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   assert.doesNotMatch(firstPage, /id="page-toc-title"/);
   assert.match(firstPage, /<li><a href="\/docs\/foundations\/">Foundations<\/a><\/li>/);
   assert.match(secondPage, /aria-label="Adjacent notes"/);
+  assert.match(firstPage, /<footer class="page-footer">[\s\S]*aria-label="Adjacent notes"/);
+  assert.doesNotMatch(homePage, /class="page-footer"/);
+  assert.doesNotMatch(sectionPage, /class="page-footer"/);
+  assert.doesNotMatch([homePage, sectionPage, firstPage, secondPage].join("\n"), /class="page-source"/);
+  assert.doesNotMatch(homePage, /class="content-list__meta">\d+ notes<\/span>/);
+  assert.doesNotMatch(sectionPage, /<li>\d+ notes<\/li>/);
   assert.doesNotMatch(firstPage, /__inkpath\/events/);
   assert.equal(await readFile(path.join(output, "_content", "01-foundations", "sample.txt"), "utf8"), "plain fixture data\n");
   await readFile(path.join(output, "favicon.svg"), "utf8");

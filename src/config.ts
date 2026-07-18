@@ -14,7 +14,6 @@ type RawConfig = {
     lang?: string;
     basePath?: string;
     url?: string;
-    sourceUrl?: string;
     logo?: string;
   };
   theme?: {
@@ -133,7 +132,6 @@ export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig>
   const title = optionalString(site.title, "site.title");
   const description = optionalString(site.description, "site.description");
   const url = optionalString(site.url, "site.url");
-  const sourceUrl = optionalString(site.sourceUrl, "site.sourceUrl");
   const logo = optionalPublicAsset(site.logo, "site.logo");
   if (logo) {
     const logoPath = path.resolve(publicDir, ...logo.split("/"));
@@ -158,7 +156,6 @@ export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig>
       lang: optionalString(site.lang, "site.lang") ?? "en",
       basePath: normalizeBasePath(optionalString(site.basePath, "site.basePath")),
       ...(url ? { url } : {}),
-      ...(sourceUrl ? { sourceUrl } : {}),
       ...(logo ? { logo } : {}),
     },
     theme: {

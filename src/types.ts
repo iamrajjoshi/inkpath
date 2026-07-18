@@ -25,7 +25,6 @@ export type SiteSettings = {
   lang: string;
   basePath: string;
   url?: string;
-  sourceUrl?: string;
   logo?: string;
 };
 

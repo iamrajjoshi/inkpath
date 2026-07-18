@@ -1,6 +1,5 @@
 import type { Page, Site } from "./types.js";
-import path from "node:path";
-import { escapeHtml, formatDate, siteUrl, toPosix } from "./utils.js";
+import { escapeHtml, formatDate, siteUrl } from "./utils.js";
 
 function pageUrl(site: Site, page: Page): string {
   return siteUrl(site.config.site.basePath, page.route);
@@ -27,7 +26,6 @@ function renderMetadata(site: Site, page: Page): string {
     if (page.parent?.kind === "section") {
       values.push(`<a href="${escapeHtml(pageUrl(site, page.parent))}">${escapeHtml(page.parent.title)}</a>`);
     }
-    values.push(escapeHtml(`${page.children.filter((child) => child.kind === "page").length} notes`));
   } else if (page.kind === "page" && page.parent?.kind === "section") {
     values.push(`<a href="${escapeHtml(pageUrl(site, page.parent))}">${escapeHtml(page.parent.title)}</a>`);
   }
@@ -66,7 +64,6 @@ function renderToc(page: Page): string {
 function contentItemMeta(page: Page): string {
   const values: string[] = [];
   if (typeof page.attributes.number === "string") values.push(page.attributes.number);
-  if (page.kind === "section") values.push(`${page.children.filter((child) => child.kind === "page").length} notes`);
   return values.length ? `<span class="content-list__meta">${escapeHtml(values.join(" · "))}</span>` : "";
 }
 
@@ -90,15 +87,6 @@ function renderContentList(site: Site, page: Page): string {
   </section>`;
 }
 
-function sourceLink(site: Site, page: Page): string {
-  const contentDirectory = toPosix(path.relative(site.config.projectRoot, site.config.contentDir));
-  const label = `<code>${escapeHtml(`${contentDirectory}/${page.relativePath}`)}</code>`;
-  const sourceUrl = site.config.site.sourceUrl;
-  if (!sourceUrl) return label;
-  const encodedPath = page.relativePath.split("/").map(encodeURIComponent).join("/");
-  return `<a href="${escapeHtml(`${sourceUrl.replace(/\/$/, "")}/${encodedPath}`)}">${label}</a>`;
-}
-
 function renderPagination(site: Site, page: Page): string {
   if (page.kind !== "page" || !page.parent) return "";
   const siblings = page.parent.children.filter((child) => child.kind === "page");
@@ -113,9 +101,10 @@ function renderPagination(site: Site, page: Page): string {
 }
 
 function renderFooter(site: Site, page: Page): string {
+  const pagination = renderPagination(site, page);
+  if (!pagination) return "";
   return `<footer class="page-footer">
-    <p class="page-source">Edit ${sourceLink(site, page)}</p>
-    ${renderPagination(site, page)}
+    ${pagination}
   </footer>`;
 }
 
