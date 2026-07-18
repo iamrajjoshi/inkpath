@@ -524,30 +524,6 @@ a:hover {
   text-underline-offset: 0.12em;
 }
 
-@media (min-width: 50rem) {
-  .page-header h1::before {
-    position: absolute;
-    top: 0.38rem;
-    left: -2.15rem;
-    width: 0.9rem;
-    height: 0.9rem;
-    transform: rotate(45deg);
-    background: var(--accent);
-    content: "";
-  }
-
-  .prose h2::before,
-  .section-heading::before {
-    position: absolute;
-    top: 0.4rem;
-    left: -1.85rem;
-    width: 0.55rem;
-    height: 0.55rem;
-    background: var(--accent);
-    content: "";
-  }
-}
-
 @media (max-width: 42rem) {
   .page-header h1 {
     font-size: 1.4rem;
