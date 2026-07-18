@@ -77,11 +77,92 @@ function parseFrontmatter(raw: string, relativePath: string): { attributes: Fron
   };
 }
 
-function plainText(markdown: string): string {
-  return markdown
+function isEscaped(value: string, index: number): boolean {
+  let slashes = 0;
+  for (let cursor = index - 1; cursor >= 0 && value[cursor] === "\\"; cursor -= 1) slashes += 1;
+  return slashes % 2 === 1;
+}
+
+function codeSpanEnd(value: string, index: number): number | undefined {
+  if (value[index] !== "`" || isEscaped(value, index)) return undefined;
+  let delimiterEnd = index;
+  while (value[delimiterEnd] === "`") delimiterEnd += 1;
+  const delimiter = value.slice(index, delimiterEnd);
+  const closing = value.indexOf(delimiter, delimiterEnd);
+  return closing >= 0 ? closing + delimiter.length : undefined;
+}
+
+function stripInlineFootnotes(markdown: string): string {
+  let result = "";
+  let index = 0;
+  while (index < markdown.length) {
+    const spanEnd = codeSpanEnd(markdown, index);
+    if (spanEnd !== undefined) {
+      result += markdown.slice(index, spanEnd);
+      index = spanEnd;
+      continue;
+    }
+    if (markdown[index] === "^" && markdown[index + 1] === "[" && !isEscaped(markdown, index)) {
+      let cursor = index + 2;
+      let depth = 1;
+      while (cursor < markdown.length && depth > 0) {
+        if (markdown[cursor] === "\\") {
+          cursor += 2;
+          continue;
+        }
+        if (markdown[cursor] === "[") depth += 1;
+        else if (markdown[cursor] === "]") depth -= 1;
+        cursor += 1;
+      }
+      if (depth === 0) {
+        index = cursor;
+        continue;
+      }
+    }
+    result += markdown[index];
+    index += 1;
+  }
+  return result;
+}
+
+function footnoteDefinitionLabels(markdown: string): Set<string> {
+  const labels = new Set<string>();
+  for (const match of markdown.matchAll(/^[ \t]{0,3}\[\^([^\]\s]+)\]:/gm)) {
+    if (match[1]) labels.add(match[1]);
+  }
+  return labels;
+}
+
+function stripNamedFootnoteReferences(markdown: string, labels: Set<string>): string {
+  if (!labels.size) return markdown;
+  let result = "";
+  let index = 0;
+  while (index < markdown.length) {
+    const spanEnd = codeSpanEnd(markdown, index);
+    if (spanEnd !== undefined) {
+      result += markdown.slice(index, spanEnd);
+      index = spanEnd;
+      continue;
+    }
+    if (markdown[index] === "[" && markdown[index + 1] === "^" && !isEscaped(markdown, index)) {
+      const closing = markdown.indexOf("]", index + 2);
+      if (closing > index + 2 && labels.has(markdown.slice(index + 2, closing))) {
+        index = closing + 1;
+        if (markdown[index] === ":") index += 1;
+        continue;
+      }
+    }
+    result += markdown[index];
+    index += 1;
+  }
+  return result;
+}
+
+function plainText(markdown: string, footnoteLabels = new Set<string>()): string {
+  return stripNamedFootnoteReferences(stripInlineFootnotes(markdown), footnoteLabels)
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/`([^`]+)`/g, "$1")
+    .replace(/(`+)([\s\S]*?)\1/g, "$2")
     .replace(/[*_~]/g, "")
     .replace(/<[^>]+>/g, "")
     .replace(/\s+/g, " ")
@@ -118,12 +199,12 @@ function deriveSummary(body: string): string {
     paragraph.push(trimmed);
   }
 
-  return firstSentence(plainText(paragraph.join(" ")));
+  return firstSentence(plainText(paragraph.join(" "), footnoteDefinitionLabels(body)));
 }
 
 function readingMinutes(body: string): number {
   const withoutFences = body.replace(/```[\s\S]*?```|~~~[\s\S]*?~~~/g, " ");
-  const words = plainText(withoutFences).split(/\s+/).filter(Boolean).length;
+  const words = plainText(withoutFences, footnoteDefinitionLabels(body)).split(/\s+/).filter(Boolean).length;
   return Math.max(1, Math.ceil(words / 220));
 }
 

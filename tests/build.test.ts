@@ -50,6 +50,25 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   assert.match(firstPage, /href="\/docs\/foundations\/second\/#second-section"/);
   assert.match(firstPage, /href="\/docs\/_content\/01-foundations\/sample\.txt"/);
   assert.match(firstPage, /class="footnote-ref"/);
+  assert.match(firstPage, /This is a short inline footnote\./);
+  assert.match(firstPage, /<section class="footnotes" aria-labelledby="__inkpath-footnotes-label">/);
+  assert.match(firstPage, /<h2 class="visually-hidden" id="__inkpath-footnotes-label">Footnotes<\/h2>/);
+  assert.match(firstPage, /aria-label="Footnote 1"/);
+  assert.match(firstPage, /aria-label="Footnote 1, occurrence 2"/);
+  assert.match(firstPage, /aria-label="Footnote 2"/);
+  assert.match(firstPage, /id="fn__inkpath-footnote-1"/);
+  assert.match(firstPage, /id="fnref__inkpath-footnote-1"/);
+  assert.match(firstPage, /id="fnref__inkpath-footnote-1:1"/);
+  assert.match(firstPage, /href="#fnref__inkpath-footnote-1:1"/);
+  assert.match(firstPage, /aria-label="Back to footnote reference 1"/);
+  assert.match(firstPage, /aria-label="Back to footnote reference 2"/);
+  assert.match(firstPage, /<aside class="annotation annotation--note" role="note" aria-labelledby="__inkpath-annotation-1-label">/);
+  assert.match(firstPage, /<p class="annotation__label" id="__inkpath-annotation-1-label">Note<\/p>/);
+  assert.match(firstPage, /<strong>Markdown<\/strong>/);
+  assert.match(firstPage, /<aside class="annotation annotation--warning" role="note" aria-labelledby="__inkpath-annotation-2-label">/);
+  assert.match(firstPage, /<p class="annotation__label" id="__inkpath-annotation-2-label">Warning<\/p>/);
+  assert.match(firstPage, /<blockquote>\s*<p>\[!note\]/);
+  assert.equal(firstPage.match(/class="annotation annotation--note"/g)?.length, 1);
   assert.match(firstPage, /class="hljs language-ts"/);
   assert.match(firstPage, /&amp;lt;script&amp;gt;|&lt;script&gt;/);
   assert.doesNotMatch(firstPage, /<script>alert/);
@@ -59,14 +78,95 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   assert.match(secondPage, /id="repeat"/);
   assert.match(secondPage, /id="repeat-2"/);
   assert.match(secondPage, /The explicit summary wins over the body\./);
-  assert.match(secondPage, /aria-label="Breadcrumb"/);
+  assert.doesNotMatch(secondPage, /aria-label="Breadcrumb"/);
+  assert.match(secondPage, /<h2 id="page-toc-title">Contents<\/h2>/);
+  assert.doesNotMatch(firstPage, /id="page-toc-title"/);
+  assert.match(firstPage, /<li><a href="\/docs\/foundations\/">Foundations<\/a><\/li>/);
   assert.match(secondPage, /aria-label="Adjacent notes"/);
   assert.doesNotMatch(firstPage, /__inkpath\/events/);
   assert.equal(await readFile(path.join(output, "_content", "01-foundations", "sample.txt"), "utf8"), "plain fixture data\n");
+  const theme = await readFile(path.join(output, "_inkpath", "theme.css"), "utf8");
+  assert.match(theme, /--reading-width: 43\.75rem/);
+  assert.match(theme, /--accent: #f36f21/);
 
   const hashesBefore = await outputHashes(output);
   await buildSite(project);
   assert.deepEqual(await outputHashes(output), hashesBefore);
+});
+
+test("keeps generated footnote identifiers separate from heading identifiers", async () => {
+  const project = await copyFixture();
+  const note = path.join(project, "content", "01-foundations", "01-first.md");
+  await writeFile(
+    note,
+    `${await readFile(note, "utf8")}\n## fn1\n\nA heading that resembles a footnote item.\n\n## fnref1\n\nA heading that resembles a footnote reference.\n`,
+  );
+
+  await buildSite(project);
+  const html = await readFile(path.join(project, "site", "foundations", "first", "index.html"), "utf8");
+  assert.match(html, /<h2 id="fn1"/);
+  assert.match(html, /<h2 id="fnref1"/);
+  assert.match(html, /id="fn__inkpath-footnote-1"/);
+  assert.match(html, /id="fnref__inkpath-footnote-1"/);
+  const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
+  assert.equal(new Set(ids).size, ids.length);
+});
+
+test("keeps a parent link on nested section pages", async () => {
+  const project = await copyFixture();
+  const nested = path.join(project, "content", "01-foundations", "01-nested");
+  await mkdir(nested);
+  await writeFile(
+    path.join(nested, "README.md"),
+    "---\ntitle: Nested section\ndescription: A section inside Foundations.\n---\n\nNested content.\n",
+  );
+
+  await buildSite(project);
+  const html = await readFile(path.join(project, "site", "foundations", "nested", "index.html"), "utf8");
+  assert.match(html, /<li><a href="\/docs\/foundations\/">Foundations<\/a><\/li>/);
+});
+
+test("removes footnote syntax from automatic summaries", async (t) => {
+  const cases = [
+    {
+      name: "inline footnote",
+      paragraph: "An inline claim.^[See [details](https://example.com/guide) for context.] A second sentence.",
+      summary: "An inline claim.",
+    },
+    {
+      name: "named footnote",
+      paragraph: "A named claim.[^context] A second sentence.\n\n[^context]: Context that belongs below the note.",
+      summary: "A named claim.",
+    },
+    {
+      name: "undefined footnote-like text",
+      paragraph: "A literal [^missing] marker stays. A second sentence.",
+      summary: "A literal [^missing] marker stays.",
+    },
+    {
+      name: "footnote syntax in code",
+      paragraph: "The literal syntax is `^[not a footnote]` and `[^missing]`. A second sentence.",
+      summary: "The literal syntax is ^[not a footnote] and [^missing].",
+    },
+  ];
+
+  for (const fixture of cases) {
+    await t.test(fixture.name, async () => {
+      const project = await copyFixture();
+      const note = path.join(project, "content", "01-foundations", "01-first.md");
+      const source = await readFile(note, "utf8");
+      await writeFile(
+        note,
+        source.replace(
+          "This first sentence becomes the automatic summary. A second sentence should not be required.",
+          fixture.paragraph,
+        ),
+      );
+
+      const result = await buildSite(project, { write: false });
+      assert.equal(result.site.pageBySource.get("01-foundations/01-first.md")?.summary, fixture.summary);
+    });
+  }
 });
 
 test("fails on missing documents, fragments, and assets", async (t) => {

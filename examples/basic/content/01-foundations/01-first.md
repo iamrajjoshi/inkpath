@@ -12,6 +12,9 @@ Read the [second note](02-second.md#second-section) and the [local data](sample.
 
 The commit result survives a lost response.[^commit]
 
+> [!NOTE]
+> The operation identity belongs to the business action, not to one network attempt.
+
 [^commit]: The write-ahead log reached the configured durability boundary.
 
 ```ts

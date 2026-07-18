@@ -6,6 +6,7 @@ import type { Page, Site } from "./types.js";
 import { escapeHtml, isExternalUrl, siteUrl, slugify, toPosix } from "./utils.js";
 
 type RenderEnvironment = {
+  annotationCount: number;
   anchors: Set<string>;
   assets: Set<string>;
   headings: Page["headings"];
@@ -14,6 +15,93 @@ type RenderEnvironment = {
   site: Site;
   diagramCount: number;
 };
+
+const annotationLabels = {
+  NOTE: "Note",
+  TIP: "Tip",
+  IMPORTANT: "Important",
+  WARNING: "Warning",
+  CAUTION: "Caution",
+} as const;
+
+type AnnotationKind = keyof typeof annotationLabels;
+
+function installAnnotations(markdown: MarkdownIt, environment: RenderEnvironment): void {
+  markdown.core.ruler.before("inline", "inkpath-annotations", (state) => {
+    for (let index = 0; index < state.tokens.length; index += 1) {
+      const opening = state.tokens[index];
+      const paragraphOpening = state.tokens[index + 1];
+      const content = state.tokens[index + 2];
+      const paragraphClosing = state.tokens[index + 3];
+      if (
+        opening?.type !== "blockquote_open" ||
+        paragraphOpening?.type !== "paragraph_open" ||
+        content?.type !== "inline" ||
+        paragraphClosing?.type !== "paragraph_close"
+      ) {
+        continue;
+      }
+
+      const marker = content.content.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*(?:\n|$)/);
+      if (!marker) continue;
+
+      let depth = 0;
+      let closingIndex = -1;
+      for (let candidate = index; candidate < state.tokens.length; candidate += 1) {
+        const token = state.tokens[candidate];
+        if (token?.type === "blockquote_open") depth += 1;
+        if (token?.type === "blockquote_close") {
+          depth -= 1;
+          if (depth === 0) {
+            closingIndex = candidate;
+            break;
+          }
+        }
+      }
+      if (closingIndex < 0) continue;
+
+      const kind = marker[1] as AnnotationKind;
+      const label = annotationLabels[kind];
+      const labelId = `__inkpath-annotation-${environment.annotationCount + 1}-label`;
+      environment.annotationCount += 1;
+
+      opening.tag = "aside";
+      opening.attrSet("class", `annotation annotation--${kind.toLowerCase()}`);
+      opening.attrSet("role", "note");
+      opening.attrSet("aria-labelledby", labelId);
+      const closing = state.tokens[closingIndex];
+      if (closing) closing.tag = "aside";
+
+      const labelOpening = new state.Token("paragraph_open", "p", 1);
+      labelOpening.block = true;
+      labelOpening.level = paragraphOpening.level;
+      labelOpening.attrSet("class", "annotation__label");
+      labelOpening.attrSet("id", labelId);
+      const labelContent = new state.Token("inline", "", 0);
+      labelContent.block = true;
+      labelContent.level = content.level;
+      labelContent.content = label;
+      labelContent.children = [];
+      const labelClosing = new state.Token("paragraph_close", "p", -1);
+      labelClosing.block = true;
+      labelClosing.level = paragraphClosing.level;
+      const labelTokens = [labelOpening, labelContent, labelClosing];
+
+      content.content = content.content.slice(marker[0].length);
+      if (content.content.trim()) {
+        state.tokens.splice(index + 1, 0, ...labelTokens);
+      } else {
+        state.tokens.splice(index + 1, 3, ...labelTokens);
+      }
+    }
+  });
+}
+
+function footnoteLabelId(environment: RenderEnvironment): string {
+  const id = "__inkpath-footnotes-label";
+  environment.anchors.add(id);
+  return id;
+}
 
 function contentAssetUrl(site: Site, sourceRelativePath: string): string {
   const encoded = sourceRelativePath
@@ -82,6 +170,41 @@ function createMarkdown(environment: RenderEnvironment): MarkdownIt {
     linkify: true,
     typographer: false,
   }).use(footnote);
+
+  installAnnotations(markdown, environment);
+
+  markdown.renderer.rules.footnote_block_open = () => {
+    const labelId = footnoteLabelId(environment);
+    return `<section class="footnotes" aria-labelledby="${labelId}">\n<h2 class="visually-hidden" id="${labelId}">Footnotes</h2>\n<ol class="footnotes-list">\n`;
+  };
+
+  markdown.renderer.rules.footnote_anchor_name = (tokens, index) => {
+    const number = Number(tokens[index]?.meta?.id ?? 0) + 1;
+    return `__inkpath-footnote-${number}`;
+  };
+
+  markdown.renderer.rules.footnote_ref = (tokens, index, options, env, renderer) => {
+    const token = tokens[index];
+    if (!token) return "";
+    const id = renderer.rules.footnote_anchor_name?.(tokens, index, options, env, renderer) ?? "";
+    const caption = renderer.rules.footnote_caption?.(tokens, index, options, env, renderer) ?? "";
+    const subId = Number(token.meta?.subId ?? 0);
+    const referenceId = subId > 0 ? `${id}:${subId}` : id;
+    const number = Number(token.meta?.id ?? 0) + 1;
+    const occurrence = subId > 0 ? `, occurrence ${subId + 1}` : "";
+    return `<sup class="footnote-ref"><a href="#fn${id}" id="fnref${referenceId}" aria-label="Footnote ${number}${occurrence}">${caption}</a></sup>`;
+  };
+
+  markdown.renderer.rules.footnote_anchor = (tokens, index, options, env, renderer) => {
+    const token = tokens[index];
+    if (!token) return "";
+    let id = renderer.rules.footnote_anchor_name?.(tokens, index, options, env, renderer) ?? "";
+    const subId = Number(token.meta?.subId ?? 0);
+    if (subId > 0) id += `:${subId}`;
+    const number = Number(token.meta?.id ?? 0) + 1;
+    const occurrence = subId > 0 ? `, occurrence ${subId + 1}` : "";
+    return ` <a href="#fnref${id}" class="footnote-backref" aria-label="Back to footnote reference ${number}${occurrence}">\u21a9\uFE0E</a>`;
+  };
 
   markdown.core.ruler.push("inkpath-heading-ids", (state) => {
     const counts = new Map<string, number>();
@@ -156,6 +279,7 @@ export function renderMarkdown(page: Page, site: Site): {
 } {
   page.headings = [];
   const environment: RenderEnvironment = {
+    annotationCount: 0,
     anchors: new Set<string>(),
     assets: new Set<string>(),
     headings: page.headings,

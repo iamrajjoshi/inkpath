@@ -53,7 +53,7 @@ content/
 - Other Markdown files are notes.
 - A numeric filename prefix supplies the default order and is omitted from the URL.
 - Frontmatter `order` and `slug` override those defaults.
-- Section and note lists, breadcrumbs, previous/next links, and each note's heading table of contents are generated from those files.
+- Section and note lists, compact page details, previous/next links, and a contents list for notes with at least three headings are generated from those files.
 
 Minimal frontmatter:
 
@@ -71,13 +71,33 @@ If `description` and `summary` are absent, Inkpath uses the first prose sentence
 
 ## Markdown
 
-Inkpath supports headings, links, images, tables, blockquotes, lists, fenced code, syntax highlighting, and footnotes.
+Inkpath supports headings, links, images, tables, blockquotes, lists, fenced code, syntax highlighting, footnotes, and block annotations.
 
 ```md
 A write is not durable merely because the API returned.[^durability]
 
 [^durability]: Define the exact persistence boundary promised by the system.
 ```
+
+Short footnotes can stay inline in the source. Both forms render in the same numbered footnotes section.
+
+```md
+The retry budget belongs to the operation.^[One user action can span several network attempts.]
+```
+
+### Annotations
+
+Use a block annotation when context should remain beside the main text. The syntax is compatible with GitHub Markdown.
+
+```md
+> [!NOTE]
+> Replication improves availability, not correctness by itself.
+
+> [!WARNING]
+> Retrying a non-idempotent write can duplicate the operation.
+```
+
+`NOTE`, `TIP`, `IMPORTANT`, `WARNING`, and `CAUTION` are supported. They render as simple labeled asides without JavaScript; malformed or lowercase markers remain ordinary blockquotes.
 
 Relative links to other notes use their source filenames. Inkpath rewrites them to the generated routes and fails the build when the target or fragment does not exist.
 
@@ -126,7 +146,7 @@ site:
 
 ## Deliberate limits
 
-Inkpath has no plugin API, template language, themes marketplace, search index, MDX runtime, deployment adapter, analytics, or database. A full rebuild is the correctness baseline. The development server binds to loopback unless another host is passed explicitly.
+Inkpath has no plugin API, template language, theme-selection system, search index, MDX runtime, deployment adapter, analytics, or database. It ships one content-first theme based on a narrow reading column, system fonts, and simple typographic navigation. A full rebuild is the correctness baseline. The development server binds to loopback unless another host is passed explicitly.
 
 The build stages are kept separate: discover and parse content, derive routes, validate links and assets, render HTML, then atomically replace the previous output. A failed build leaves the last successful site in place.
 
@@ -141,4 +161,4 @@ pnpm example:build
 pnpm verify
 ```
 
-The tests cover route ordering, summaries, footnotes, code escaping and highlighting, Mermaid accessibility and security, broken links and assets, base paths, deterministic output, and traversal-safe serving.
+The tests cover route ordering, summaries, annotations, footnotes, code escaping and highlighting, Mermaid accessibility and security, broken links and assets, base paths, deterministic output, and traversal-safe serving.
