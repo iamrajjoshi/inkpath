@@ -16,6 +16,11 @@ type RawConfig = {
     url?: string;
     sourceUrl?: string;
   };
+  theme?: {
+    accent?: string;
+    interactive?: string;
+    subtle?: string;
+  };
 };
 
 async function exists(filePath: string): Promise<boolean> {
@@ -63,6 +68,14 @@ function optionalString(value: unknown, label: string): string | undefined {
   return value.trim();
 }
 
+function optionalHexColor(value: unknown, label: string): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !/^#[0-9a-fA-F]{6}$/.test(value.trim())) {
+    throw new Error(`${label} must be a six-digit hexadecimal color`);
+  }
+  return value.trim().toLowerCase();
+}
+
 export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig> {
   const projectRoot = await realpath(path.resolve(projectDirectory));
   const configPath = path.join(projectRoot, "inkpath.yaml");
@@ -103,6 +116,10 @@ export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig>
   const description = optionalString(site.description, "site.description");
   const url = optionalString(site.url, "site.url");
   const sourceUrl = optionalString(site.sourceUrl, "site.sourceUrl");
+  if (raw.theme !== undefined && (typeof raw.theme !== "object" || raw.theme === null || Array.isArray(raw.theme))) {
+    throw new Error("theme must be a YAML mapping");
+  }
+  const theme = raw.theme ?? {};
   return {
     projectRoot,
     contentDir,
@@ -115,6 +132,11 @@ export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig>
       basePath: normalizeBasePath(optionalString(site.basePath, "site.basePath")),
       ...(url ? { url } : {}),
       ...(sourceUrl ? { sourceUrl } : {}),
+    },
+    theme: {
+      accent: optionalHexColor(theme.accent, "theme.accent") ?? "#f36f21",
+      interactive: optionalHexColor(theme.interactive, "theme.interactive") ?? "#a54016",
+      subtle: optionalHexColor(theme.subtle, "theme.subtle") ?? "#fff0e8",
     },
   };
 }

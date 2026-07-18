@@ -7,7 +7,7 @@ import { loadConfig } from "./config.js";
 import { loadSite } from "./content.js";
 import { renderMarkdown } from "./markdown.js";
 import { renderDocument, renderNotFound } from "./render.js";
-import { mermaidClientSource, themeCss } from "./theme.js";
+import { mermaidClientSource, renderThemeCss } from "./theme.js";
 import type { BuildResult, Page, InkpathConfig, Site } from "./types.js";
 import { isPathWithin, pathsOverlap } from "./utils.js";
 
@@ -142,7 +142,7 @@ async function writeOutput(
   try {
     if (await exists(config.publicDir)) await copyDirectory(config.publicDir, stage, false);
     await mkdir(path.join(stage, "_inkpath"), { recursive: true });
-    await writeFile(path.join(stage, "_inkpath", "theme.css"), themeCss.trimStart(), "utf8");
+    await writeFile(path.join(stage, "_inkpath", "theme.css"), renderThemeCss(config.theme).trimStart(), "utf8");
 
     const contentAssets = path.join(stage, "_content");
     await mkdir(contentAssets, { recursive: true });

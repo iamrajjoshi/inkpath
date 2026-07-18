@@ -88,10 +88,39 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   const theme = await readFile(path.join(output, "_inkpath", "theme.css"), "utf8");
   assert.match(theme, /--reading-width: 43\.75rem/);
   assert.match(theme, /--accent: #f36f21/);
+  assert.match(theme, /--interactive: #a54016/);
+  assert.match(theme, /--inline-code: #fff0e8/);
 
   const hashesBefore = await outputHashes(output);
   await buildSite(project);
   assert.deepEqual(await outputHashes(output), hashesBefore);
+});
+
+test("supports a constrained site accent palette", async () => {
+  const project = await copyFixture();
+  const config = path.join(project, "inkpath.yaml");
+  await writeFile(
+    config,
+    `${await readFile(config, "utf8")}\ntheme:\n  accent: "#0f766e"\n  interactive: "#0f766e"\n  subtle: "#f0fdfa"\n`,
+  );
+
+  await buildSite(project);
+  const theme = await readFile(path.join(project, "site", "_inkpath", "theme.css"), "utf8");
+  assert.match(theme, /--accent: #0f766e/);
+  assert.match(theme, /--accent-soft: #f0fdfa/);
+  assert.match(theme, /--interactive: #0f766e/);
+  assert.match(theme, /--inline-code: #f0fdfa/);
+});
+
+test("rejects unsafe theme color values", async (t) => {
+  for (const value of ["red", "#fff", "url(https://example.com)", "#0f766e; color: red"]) {
+    await t.test(value, async () => {
+      const project = await copyFixture();
+      const config = path.join(project, "inkpath.yaml");
+      await writeFile(config, `${await readFile(config, "utf8")}\ntheme:\n  accent: ${JSON.stringify(value)}\n`);
+      await assert.rejects(buildSite(project), /theme\.accent must be a six-digit hexadecimal color/);
+    });
+  }
 });
 
 test("keeps generated footnote identifiers separate from heading identifiers", async () => {

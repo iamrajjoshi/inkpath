@@ -28,12 +28,19 @@ export type SiteSettings = {
   sourceUrl?: string;
 };
 
+export type ThemeSettings = {
+  accent: string;
+  interactive: string;
+  subtle: string;
+};
+
 export type InkpathConfig = {
   projectRoot: string;
   contentDir: string;
   outputDir: string;
   publicDir: string;
   site: SiteSettings;
+  theme: ThemeSettings;
 };
 
 export type PageKind = "home" | "section" | "page";

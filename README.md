@@ -140,9 +140,16 @@ site:
   basePath: /notes
   url: https://example.com
   sourceUrl: https://github.com/me/notes/blob/main/content
+
+theme:
+  accent: "#0f766e"
+  interactive: "#0f766e"
+  subtle: "#f0fdfa"
 ```
 
 `basePath` prefixes every generated link and asset. The output, content, and public directories must remain inside the project root.
+
+The optional theme values change the site mark and annotation border (`accent`), link underlines and focus rings (`interactive`), and inline-code or annotation background (`subtle`). Colors must use six-digit hexadecimal notation. The default palette remains unchanged when `theme` is omitted.
 
 ## Deliberate limits
 

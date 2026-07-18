@@ -1,4 +1,7 @@
-export const themeCss = String.raw`
+import type { ThemeSettings } from "./types.js";
+
+export function renderThemeCss(theme: ThemeSettings): string {
+  return String.raw`
 :root {
   color-scheme: light;
   --background: #ffffff;
@@ -6,10 +9,10 @@ export const themeCss = String.raw`
   --muted: #666666;
   --faint: #707070;
   --line: #e5e5e5;
-  --accent: #f36f21;
-  --accent-soft: #ffc499;
-  --interactive: #a54016;
-  --inline-code: #fff0e8;
+  --accent: ${theme.accent};
+  --accent-soft: ${theme.subtle};
+  --interactive: ${theme.interactive};
+  --inline-code: ${theme.subtle};
   --block-code: #f6f6f6;
   --reading-width: 43.75rem;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
@@ -561,6 +564,7 @@ a:hover {
   }
 }
 `;
+}
 
 export const mermaidClientSource = String.raw`
 import mermaid from "mermaid";
