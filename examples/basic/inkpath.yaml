@@ -1,0 +1,6 @@
+content: content
+output: site
+public: public
+site:
+  title: Inkpath example
+  description: A small example site built from Markdown.

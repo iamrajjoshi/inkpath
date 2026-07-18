@@ -1,0 +1,144 @@
+# Inkpath
+
+Inkpath turns a directory of Markdown files into a small static notes or documentation site. It has one layout, one stylesheet, and no framework code in the generated pages.
+
+Inkpath is a standalone package. A site keeps its own Markdown and adds Inkpath as a dependency; the generator does not own or copy that content back into this repository.
+
+## Use it
+
+```bash
+pnpm install
+pnpm dev
+```
+
+That command runs the sanitized site in `examples/basic/` at `http://127.0.0.1:3000` and reloads after a successful rebuild.
+
+To use Inkpath from another pnpm project before an npm release:
+
+```bash
+pnpm add github:iamrajjoshi/inkpath#<commit-sha>
+pnpm exec inkpath dev
+```
+
+Pin an exact commit so builds stay reproducible. While the GitHub repository is private, installs and deployment jobs also need GitHub credentials with read access.
+
+The project using Inkpath supplies `content/`, `public/`, and an optional `inkpath.yaml`.
+
+```bash
+pnpm exec inkpath check       # parse and validate without writing
+pnpm exec inkpath build       # write the static site to site/
+pnpm exec inkpath dev         # build, serve, watch, and live reload
+```
+
+The generated `site/` directory can be served by any static file host.
+
+## Content layout
+
+Inkpath uses the filesystem as the navigation tree.
+
+```text
+content/
+├── README.md
+├── 01-cloud-infrastructure/
+│   ├── README.md
+│   ├── 01-cloud-foundations.md
+│   └── 02-containers.md
+└── 02-system-design/
+    ├── README.md
+    └── 01-frame-the-problem.md
+```
+
+- The root `README.md` is the home page.
+- A directory `README.md` is the section page.
+- Other Markdown files are notes.
+- A numeric filename prefix supplies the default order and is omitted from the URL.
+- Frontmatter `order` and `slug` override those defaults.
+- Section and note lists, breadcrumbs, previous/next links, and each note's heading table of contents are generated from those files.
+
+Minimal frontmatter:
+
+```yaml
+---
+title: Storage engines
+description: How pages, logs, indexes, and compaction shape database behavior.
+order: 3
+---
+```
+
+Supported presentation metadata includes `number`, `date`, and `updated`. Other fields, including `duration`, `difficulty`, and `tags`, are validated or preserved for sites that want to use them later.
+
+If `description` and `summary` are absent, Inkpath uses the first prose sentence as the page summary. This is deterministic; it does not call a model or a network service.
+
+## Markdown
+
+Inkpath supports headings, links, images, tables, blockquotes, lists, fenced code, syntax highlighting, and footnotes.
+
+```md
+A write is not durable merely because the API returned.[^durability]
+
+[^durability]: Define the exact persistence boundary promised by the system.
+```
+
+Relative links to other notes use their source filenames. Inkpath rewrites them to the generated routes and fails the build when the target or fragment does not exist.
+
+```md
+[Read the storage note](../03-system-design/03-storage-data-modeling.md#write-ahead-logs)
+```
+
+Relative images and files are copied from `content/` and checked during the build. Raw HTML and MDX are intentionally not executed.
+
+### Mermaid
+
+Use a `mermaid` fence. Every diagram needs Mermaid's accessible title and description fields.
+
+````md
+```mermaid
+flowchart LR
+  accTitle: Request path
+  accDescr: A request moves from the client through a load balancer to an application and database.
+  client[Client] --> loadBalancer[Load balancer]
+  loadBalancer --> app[Application]
+  app --> database[(Database)]
+```
+````
+
+Mermaid is bundled locally only when at least one page needs it. It runs with strict security settings. If rendering fails, the escaped diagram source remains readable.
+
+## Configuration
+
+`inkpath.yaml` is optional.
+
+```yaml
+content: content
+output: site
+public: public
+
+site:
+  title: My notes
+  description: Notes about systems I want to remember.
+  lang: en
+  basePath: /notes
+  url: https://example.com
+  sourceUrl: https://github.com/me/notes/blob/main/content
+```
+
+`basePath` prefixes every generated link and asset. The output, content, and public directories must remain inside the project root.
+
+## Deliberate limits
+
+Inkpath has no plugin API, template language, themes marketplace, search index, MDX runtime, deployment adapter, analytics, or database. A full rebuild is the correctness baseline. The development server binds to loopback unless another host is passed explicitly.
+
+The build stages are kept separate: discover and parse content, derive routes, validate links and assets, render HTML, then atomically replace the previous output. A failed build leaves the last successful site in place.
+
+## Development
+
+```bash
+pnpm typecheck
+pnpm test
+pnpm check
+pnpm build
+pnpm example:build
+pnpm verify
+```
+
+The tests cover route ordering, summaries, footnotes, code escaping and highlighting, Mermaid accessibility and security, broken links and assets, base paths, deterministic output, and traversal-safe serving.

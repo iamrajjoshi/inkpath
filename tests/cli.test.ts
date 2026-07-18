@@ -1,0 +1,26 @@
+import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { access, cp, mkdtemp, symlink } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+const execute = promisify(execFile);
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+test("the compiled CLI runs when invoked through a package-manager bin symlink", async () => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "inkpath-cli-"));
+  const project = path.join(temporaryRoot, "project");
+  const bin = path.join(temporaryRoot, "inkpath");
+  await cp(path.join(repositoryRoot, "tests", "fixtures", "site"), project, { recursive: true });
+  await symlink(path.join(repositoryRoot, "dist", "cli.js"), bin);
+
+  const checked = await execute(process.execPath, [bin, "check", project]);
+  assert.match(checked.stdout, /Checked 4 pages \(1 diagrams\)/);
+
+  const built = await execute(process.execPath, [bin, "build", project]);
+  assert.match(built.stdout, /Built 4 pages/);
+  await access(path.join(project, "site", "index.html"));
+});

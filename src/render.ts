@@ -1,0 +1,182 @@
+import type { Page, Site } from "./types.js";
+import path from "node:path";
+import { escapeHtml, formatDate, siteUrl, toPosix } from "./utils.js";
+
+function pageUrl(site: Site, page: Page): string {
+  return siteUrl(site.config.site.basePath, page.route);
+}
+
+function ancestors(page: Page): Page[] {
+  const chain: Page[] = [];
+  let current = page.parent;
+  while (current) {
+    chain.unshift(current);
+    current = current.parent;
+  }
+  return chain;
+}
+
+function renderBreadcrumbs(site: Site, page: Page): string {
+  if (page.kind === "home") return "";
+  const parents = ancestors(page);
+  const items = parents
+    .map((parent) => `<li><a href="${escapeHtml(pageUrl(site, parent))}">${escapeHtml(parent.title)}</a></li>`)
+    .join("");
+  return `<nav class="breadcrumbs" aria-label="Breadcrumb"><ol>${items}<li aria-current="page">${escapeHtml(page.title)}</li></ol></nav>`;
+}
+
+function eyebrow(page: Page): string | undefined {
+  if (page.kind === "home") return undefined;
+  if (page.kind === "section") return `${page.children.filter((child) => child.kind === "page").length} notes`;
+  const number = typeof page.attributes.number === "string" ? page.attributes.number : undefined;
+  return number ?? page.parent?.title ?? "Note";
+}
+
+function renderMetadata(page: Page): string {
+  const values: string[] = [];
+  const updated = formatDate(page.attributes.updated);
+  const published = formatDate(page.attributes.date);
+  if (updated) values.push(`Updated ${updated}`);
+  else if (published) values.push(published);
+
+  if (!values.length) return "";
+  return `<ul class="page-meta" aria-label="Page details">${values.map((value) => `<li>${escapeHtml(value)}</li>`).join("")}</ul>`;
+}
+
+function renderHeader(page: Page): string {
+  const label = eyebrow(page);
+  return `<header class="page-header">
+    ${label ? `<p class="eyebrow">${escapeHtml(label)}</p>` : ""}
+    <h1>${escapeHtml(page.title)}</h1>
+    <p class="lede">${escapeHtml(page.summary)}</p>
+    ${renderMetadata(page)}
+  </header>`;
+}
+
+function renderToc(page: Page): string {
+  if (!page.headings.length) return "";
+  const entries = page.headings
+    .map(
+      (heading) =>
+        `<li data-depth="${heading.depth}"><a href="#${escapeHtml(heading.id)}">${escapeHtml(heading.title)}</a></li>`,
+    )
+    .join("");
+  return `<nav class="page-toc" aria-labelledby="page-toc-title">
+    <h2 id="page-toc-title">On this page</h2>
+    <ol>${entries}</ol>
+  </nav>`;
+}
+
+function contentItemMeta(page: Page): string {
+  const values: string[] = [];
+  if (typeof page.attributes.number === "string") values.push(page.attributes.number);
+  if (page.kind === "section") values.push(`${page.children.filter((child) => child.kind === "page").length} notes`);
+  return values.length ? `<span class="content-list__meta">${escapeHtml(values.join(" · "))}</span>` : "";
+}
+
+function renderContentList(site: Site, page: Page): string {
+  const children = page.children.filter((child) => child.kind === "section" || child.kind === "page");
+  if (!children.length) return "";
+  const label = page.kind === "home" ? "Collections" : "Notes";
+  const items = children
+    .map(
+      (child) => `<li>
+        <a href="${escapeHtml(pageUrl(site, child))}">
+          <span class="content-list__title">${escapeHtml(child.title)}${contentItemMeta(child)}</span>
+          <span class="content-list__summary">${escapeHtml(child.summary)}</span>
+        </a>
+      </li>`,
+    )
+    .join("");
+  return `<section aria-labelledby="content-list-title">
+    <h2 id="content-list-title" class="eyebrow">${label}</h2>
+    <ol class="content-list">${items}</ol>
+  </section>`;
+}
+
+function sourceLink(site: Site, page: Page): string {
+  const contentDirectory = toPosix(path.relative(site.config.projectRoot, site.config.contentDir));
+  const label = `<code>${escapeHtml(`${contentDirectory}/${page.relativePath}`)}</code>`;
+  const sourceUrl = site.config.site.sourceUrl;
+  if (!sourceUrl) return label;
+  const encodedPath = page.relativePath.split("/").map(encodeURIComponent).join("/");
+  return `<a href="${escapeHtml(`${sourceUrl.replace(/\/$/, "")}/${encodedPath}`)}">${label}</a>`;
+}
+
+function renderPagination(site: Site, page: Page): string {
+  if (page.kind !== "page" || !page.parent) return "";
+  const siblings = page.parent.children.filter((child) => child.kind === "page");
+  const index = siblings.indexOf(page);
+  const previous = index > 0 ? siblings[index - 1] : undefined;
+  const next = index >= 0 && index < siblings.length - 1 ? siblings[index + 1] : undefined;
+  if (!previous && !next) return "";
+  return `<nav class="page-pagination" aria-label="Adjacent notes">
+    ${previous ? `<a rel="prev" href="${escapeHtml(pageUrl(site, previous))}"><span>Previous</span><strong>${escapeHtml(previous.title)}</strong></a>` : "<span></span>"}
+    ${next ? `<a rel="next" href="${escapeHtml(pageUrl(site, next))}"><span>Next</span><strong>${escapeHtml(next.title)}</strong></a>` : ""}
+  </nav>`;
+}
+
+function renderFooter(site: Site, page: Page): string {
+  return `<footer class="page-footer">
+    <p class="page-source">Edit ${sourceLink(site, page)}</p>
+    ${renderPagination(site, page)}
+  </footer>`;
+}
+
+function absoluteCanonical(site: Site, page: Page): string | undefined {
+  const base = site.config.site.url;
+  if (!base) return undefined;
+  return new URL(pageUrl(site, page), base.endsWith("/") ? base : `${base}/`).href;
+}
+
+export function renderDocument(site: Site, page: Page, diagrams: number): string {
+  const siteTitle = site.config.site.title ?? site.home.title;
+  const description = page.summary;
+  const title = page.kind === "home" ? siteTitle : `${page.title} · ${siteTitle}`;
+  const canonical = absoluteCanonical(site, page);
+  const bodyContent = `<article class="prose">${page.rendered}</article>`;
+  const listing = renderContentList(site, page);
+  const script = diagrams
+    ? `<script type="module" src="${escapeHtml(`${site.config.site.basePath}/_inkpath/inkpath.js`)}"></script>`
+    : "";
+
+  return `<!doctype html>
+<html lang="${escapeHtml(site.config.site.lang)}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(title)}</title>
+  <meta name="description" content="${escapeHtml(description)}">
+  <meta name="generator" content="Inkpath 0.1.0">
+  ${canonical ? `<link rel="canonical" href="${escapeHtml(canonical)}">` : ""}
+  <link rel="icon" href="${escapeHtml(`${site.config.site.basePath}/favicon.svg`)}" type="image/svg+xml">
+  <link rel="stylesheet" href="${escapeHtml(`${site.config.site.basePath}/_inkpath/theme.css`)}">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a class="site-brand" href="${escapeHtml(pageUrl(site, site.home))}">
+        <span class="site-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+        <span class="site-title">${escapeHtml(siteTitle)}</span>
+      </a>
+    </div>
+  </header>
+  <main class="page-shell" id="main-content">
+    ${renderBreadcrumbs(site, page)}
+    ${renderHeader(page)}
+    ${renderToc(page)}
+    ${bodyContent}
+    ${listing}
+    ${renderFooter(site, page)}
+  </main>
+  ${script}
+</body>
+</html>
+`;
+}
+
+export function renderNotFound(site: Site): string {
+  const siteTitle = site.config.site.title ?? site.home.title;
+  return `<!doctype html><html lang="${escapeHtml(site.config.site.lang)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Not found · ${escapeHtml(siteTitle)}</title><link rel="stylesheet" href="${escapeHtml(`${site.config.site.basePath}/_inkpath/theme.css`)}"></head><body><main class="page-shell"><header class="page-header"><p class="eyebrow">404</p><h1>Page not found</h1><p class="lede">The requested note does not exist.</p></header><p><a href="${escapeHtml(pageUrl(site, site.home))}">Return to the contents</a></p></main></body></html>\n`;
+}
