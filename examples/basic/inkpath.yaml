@@ -4,3 +4,4 @@ public: public
 site:
   title: Inkpath example
   description: A small example site built from Markdown.
+  logo: favicon.svg

@@ -140,6 +140,7 @@ site:
   basePath: /notes
   url: https://example.com
   sourceUrl: https://github.com/me/notes/blob/main/content
+  logo: favicon.svg
 
 theme:
   accent: "#0f766e"
@@ -148,6 +149,8 @@ theme:
 ```
 
 `basePath` prefixes every generated link and asset. The output, content, and public directories must remain inside the project root.
+
+`site.logo` is an optional path inside `public`. When present, Inkpath places the image beside the site title and treats it as decorative because the title already names the home link. Without it, the default three-line mark remains. The path is validated during every build and respects `basePath`.
 
 The optional theme values change the site mark and annotation border (`accent`), link underlines and focus rings (`interactive`), and inline-code or annotation background (`subtle`). Colors must use six-digit hexadecimal notation. The default palette remains unchanged when `theme` is omitted.
 

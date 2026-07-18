@@ -26,6 +26,7 @@ export type SiteSettings = {
   basePath: string;
   url?: string;
   sourceUrl?: string;
+  logo?: string;
 };
 
 export type ThemeSettings = {

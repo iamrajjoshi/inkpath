@@ -46,6 +46,8 @@ test("builds deterministic static pages with the complete Markdown surface", asy
 
   assert.match(homePage, /Fixture notes/);
   assert.match(homePage, /Small examples of the supported Markdown surface/);
+  assert.match(homePage, /<img class="site-logo" src="\/docs\/favicon\.svg" alt="" width="28" height="28">/);
+  assert.doesNotMatch(homePage, /class="site-mark"/);
   assert.match(firstPage, /This first sentence becomes the automatic summary\./);
   assert.match(firstPage, /href="\/docs\/foundations\/second\/#second-section"/);
   assert.match(firstPage, /href="\/docs\/_content\/01-foundations\/sample\.txt"/);
@@ -85,15 +87,45 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   assert.match(secondPage, /aria-label="Adjacent notes"/);
   assert.doesNotMatch(firstPage, /__inkpath\/events/);
   assert.equal(await readFile(path.join(output, "_content", "01-foundations", "sample.txt"), "utf8"), "plain fixture data\n");
+  await readFile(path.join(output, "favicon.svg"), "utf8");
   const theme = await readFile(path.join(output, "_inkpath", "theme.css"), "utf8");
   assert.match(theme, /--reading-width: 43\.75rem/);
   assert.match(theme, /--accent: #f36f21/);
   assert.match(theme, /--interactive: #a54016/);
   assert.match(theme, /--inline-code: #fff0e8/);
+  assert.match(theme, /\.site-logo \{/);
 
   const hashesBefore = await outputHashes(output);
   await buildSite(project);
   assert.deepEqual(await outputHashes(output), hashesBefore);
+});
+
+test("keeps the default mark when a logo is not configured", async () => {
+  const project = await copyFixture();
+  const config = path.join(project, "inkpath.yaml");
+  await writeFile(config, (await readFile(config, "utf8")).replace("  logo: favicon.svg\n", ""));
+
+  await buildSite(project);
+  const html = await readFile(path.join(project, "site", "index.html"), "utf8");
+  assert.match(html, /<span class="site-mark" aria-hidden="true">/);
+  assert.doesNotMatch(html, /class="site-logo"/);
+});
+
+test("rejects unsafe or missing logo paths", async (t) => {
+  for (const value of ["../favicon.svg", "/favicon.svg", "https://example.com/logo.svg", "missing.svg"]) {
+    await t.test(value, async () => {
+      const project = await copyFixture();
+      const config = path.join(project, "inkpath.yaml");
+      await writeFile(
+        config,
+        (await readFile(config, "utf8")).replace("favicon.svg", value),
+      );
+      await assert.rejects(
+        buildSite(project),
+        /site\.logo (?:must be a relative path inside public|does not exist in public)/,
+      );
+    });
+  }
 });
 
 test("supports a constrained site accent palette", async () => {

@@ -15,6 +15,7 @@ type RawConfig = {
     basePath?: string;
     url?: string;
     sourceUrl?: string;
+    logo?: string;
   };
   theme?: {
     accent?: string;
@@ -76,6 +77,23 @@ function optionalHexColor(value: unknown, label: string): string | undefined {
   return value.trim().toLowerCase();
 }
 
+function optionalPublicAsset(value: unknown, label: string): string | undefined {
+  const asset = optionalString(value, label);
+  if (asset === undefined) return undefined;
+  const segments = asset.split("/");
+  if (
+    path.posix.isAbsolute(asset) ||
+    path.win32.isAbsolute(asset) ||
+    asset.includes("\\") ||
+    asset.includes("?") ||
+    asset.includes("#") ||
+    segments.some((segment) => !segment || segment === "." || segment === "..")
+  ) {
+    throw new Error(`${label} must be a relative path inside public`);
+  }
+  return segments.join("/");
+}
+
 export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig> {
   const projectRoot = await realpath(path.resolve(projectDirectory));
   const configPath = path.join(projectRoot, "inkpath.yaml");
@@ -116,6 +134,15 @@ export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig>
   const description = optionalString(site.description, "site.description");
   const url = optionalString(site.url, "site.url");
   const sourceUrl = optionalString(site.sourceUrl, "site.sourceUrl");
+  const logo = optionalPublicAsset(site.logo, "site.logo");
+  if (logo) {
+    const logoPath = path.resolve(publicDir, ...logo.split("/"));
+    if (!(await exists(logoPath))) throw new Error(`site.logo does not exist in public: ${logo}`);
+    const info = await lstat(logoPath);
+    if (info.isSymbolicLink() || !info.isFile()) {
+      throw new Error(`site.logo must be a regular file in public: ${logo}`);
+    }
+  }
   if (raw.theme !== undefined && (typeof raw.theme !== "object" || raw.theme === null || Array.isArray(raw.theme))) {
     throw new Error("theme must be a YAML mapping");
   }
@@ -132,6 +159,7 @@ export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig>
       basePath: normalizeBasePath(optionalString(site.basePath, "site.basePath")),
       ...(url ? { url } : {}),
       ...(sourceUrl ? { sourceUrl } : {}),
+      ...(logo ? { logo } : {}),
     },
     theme: {
       accent: optionalHexColor(theme.accent, "theme.accent") ?? "#f36f21",

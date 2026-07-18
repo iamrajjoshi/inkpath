@@ -6,6 +6,19 @@ function pageUrl(site: Site, page: Page): string {
   return siteUrl(site.config.site.basePath, page.route);
 }
 
+function publicAssetUrl(site: Site, asset: string): string {
+  const encoded = asset.split("/").map(encodeURIComponent).join("/");
+  return `${site.config.site.basePath}/${encoded}`;
+}
+
+function renderSiteMark(site: Site): string {
+  const logo = site.config.site.logo;
+  if (logo) {
+    return `<img class="site-logo" src="${escapeHtml(publicAssetUrl(site, logo))}" alt="" width="28" height="28">`;
+  }
+  return `<span class="site-mark" aria-hidden="true"><span></span><span></span><span></span></span>`;
+}
+
 function renderMetadata(site: Site, page: Page): string {
   const values: string[] = [];
   const number = typeof page.attributes.number === "string" ? page.attributes.number : undefined;
@@ -140,7 +153,7 @@ export function renderDocument(site: Site, page: Page, diagrams: number): string
   <header class="site-header">
     <div class="site-header__inner">
       <a class="site-brand" href="${escapeHtml(pageUrl(site, site.home))}">
-        <span class="site-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+        ${renderSiteMark(site)}
         <span class="site-title">${escapeHtml(siteTitle)}</span>
       </a>
     </div>

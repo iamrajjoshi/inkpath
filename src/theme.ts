@@ -89,6 +89,14 @@ a:hover {
   background: var(--inline-code);
 }
 
+.site-logo {
+  display: block;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: 0 0 1.75rem;
+  object-fit: contain;
+}
+
 .site-mark {
   display: grid;
   width: 1.25rem;
