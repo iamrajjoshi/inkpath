@@ -1,5 +1,6 @@
 import path from "node:path";
 import hljs from "highlight.js";
+import katex from "katex";
 import MarkdownIt from "markdown-it";
 import footnote from "markdown-it-footnote";
 import type { Page, Site } from "./types.js";
@@ -14,6 +15,7 @@ type RenderEnvironment = {
   page: Page;
   site: Site;
   diagramCount: number;
+  mathCount: number;
 };
 
 const annotationLabels = {
@@ -43,7 +45,7 @@ function installAnnotations(markdown: MarkdownIt, environment: RenderEnvironment
       }
 
       const marker = content.content.match(
-        /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*(?:\n|$)/,
+        /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]([+-])?[ \t]*([^\n]*)(?:\n|$)/,
       );
       if (!marker) continue;
 
@@ -63,18 +65,21 @@ function installAnnotations(markdown: MarkdownIt, environment: RenderEnvironment
       if (closingIndex < 0) continue;
 
       const kind = marker[1] as AnnotationKind;
-      const label = annotationLabels[kind];
+      const fold = marker[2];
+      const label = marker[3]?.trim() || annotationLabels[kind];
       const labelId = `__inkpath-annotation-${environment.annotationCount + 1}-label`;
       environment.annotationCount += 1;
 
-      opening.tag = "aside";
+      opening.tag = fold ? "details" : "aside";
       opening.attrSet("class", `annotation annotation--${kind.toLowerCase()}`);
       opening.attrSet("role", "note");
       opening.attrSet("aria-labelledby", labelId);
+      if (fold === "+") opening.attrSet("open", "");
       const closing = state.tokens[closingIndex];
-      if (closing) closing.tag = "aside";
+      if (closing) closing.tag = fold ? "details" : "aside";
 
-      const labelOpening = new state.Token("paragraph_open", "p", 1);
+      const labelTag = fold ? "summary" : "p";
+      const labelOpening = new state.Token(`${labelTag}_open`, labelTag, 1);
       labelOpening.block = true;
       labelOpening.level = paragraphOpening.level;
       labelOpening.attrSet("class", "annotation__label");
@@ -84,7 +89,7 @@ function installAnnotations(markdown: MarkdownIt, environment: RenderEnvironment
       labelContent.level = content.level;
       labelContent.content = label;
       labelContent.children = [];
-      const labelClosing = new state.Token("paragraph_close", "p", -1);
+      const labelClosing = new state.Token(`${labelTag}_close`, labelTag, -1);
       labelClosing.block = true;
       labelClosing.level = paragraphClosing.level;
       const labelTokens = [labelOpening, labelContent, labelClosing];
@@ -97,6 +102,94 @@ function installAnnotations(markdown: MarkdownIt, environment: RenderEnvironment
       }
     }
   });
+}
+
+function installMath(markdown: MarkdownIt, environment: RenderEnvironment): void {
+  if (!environment.site.config.markdown.math) return;
+
+  markdown.block.ruler.before(
+    "fence",
+    "inkpath-math-block",
+    (state, startLine, endLine, silent) => {
+      const start = (state.bMarks[startLine] ?? 0) + (state.tShift[startLine] ?? 0);
+      const maximum = state.eMarks[startLine] ?? start;
+      const opening = state.src.slice(start, maximum).trim();
+      if (!opening.startsWith("$$")) return false;
+
+      let content = "";
+      let nextLine = startLine + 1;
+      let closingLine = startLine;
+      if (opening.length > 4 && opening.endsWith("$$")) {
+        content = opening.slice(2, -2).trim();
+      } else if (opening !== "$$") {
+        return false;
+      } else {
+        const lines: string[] = [];
+        for (; nextLine < endLine; nextLine += 1) {
+          const lineStart = (state.bMarks[nextLine] ?? 0) + (state.tShift[nextLine] ?? 0);
+          const lineEnd = state.eMarks[nextLine] ?? lineStart;
+          const line = state.src.slice(lineStart, lineEnd);
+          if (line.trim() === "$$") break;
+          lines.push(line);
+        }
+        if (nextLine >= endLine) return false;
+        content = lines.join("\n").trim();
+        closingLine = nextLine;
+      }
+      if (!content) return false;
+      if (silent) return true;
+
+      const token = state.push("inkpath_math_block", "div", 0);
+      token.block = true;
+      token.content = content;
+      token.map = [startLine, closingLine + 1];
+      state.line = closingLine + 1;
+      return true;
+    },
+  );
+
+  markdown.inline.ruler.before("escape", "inkpath-math-inline", (state, silent) => {
+    const start = state.pos;
+    if (state.src[start] !== "$" || state.src[start + 1] === "$" || state.src[start + 1] === " ") {
+      return false;
+    }
+    let end = start + 1;
+    while ((end = state.src.indexOf("$", end)) >= 0) {
+      let slashes = 0;
+      for (let cursor = end - 1; cursor > start && state.src[cursor] === "\\"; cursor -= 1) {
+        slashes += 1;
+      }
+      if (slashes % 2 === 0) break;
+      end += 1;
+    }
+    if (end < 0 || end === start + 1 || state.src[end - 1] === " ") return false;
+    if (!silent) {
+      const token = state.push("inkpath_math_inline", "math", 0);
+      token.content = state.src.slice(start + 1, end);
+    }
+    state.pos = end + 1;
+    return true;
+  });
+
+  const renderMath = (source: string, displayMode: boolean): string => {
+    try {
+      environment.mathCount += 1;
+      return katex.renderToString(source, {
+        displayMode,
+        output: "htmlAndMathml",
+        strict: "error",
+        throwOnError: true,
+        trust: false,
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "invalid expression";
+      throw new Error(`${environment.page.relativePath}: invalid KaTeX expression: ${detail}`);
+    }
+  };
+  markdown.renderer.rules.inkpath_math_inline = (tokens, index) =>
+    renderMath(tokens[index]?.content ?? "", false);
+  markdown.renderer.rules.inkpath_math_block = (tokens, index) =>
+    `<div class="math-display">${renderMath(tokens[index]?.content ?? "", true)}</div>\n`;
 }
 
 function footnoteLabelId(environment: RenderEnvironment): string {
@@ -185,6 +278,7 @@ function createMarkdown(environment: RenderEnvironment): MarkdownIt {
   }).use(footnote);
 
   installAnnotations(markdown, environment);
+  installMath(markdown, environment);
 
   markdown.renderer.rules.footnote_block_open = () => {
     const labelId = footnoteLabelId(environment);
@@ -234,6 +328,19 @@ function createMarkdown(environment: RenderEnvironment): MarkdownIt {
       token.attrSet("tabindex", "-1");
       environment.anchors.add(id);
       if (depth === 2 || depth === 3) environment.headings.push({ depth, id, title });
+
+      const inline = state.tokens[index + 1];
+      if (inline?.type === "inline") {
+        inline.children ??= [];
+        const linkOpening = new state.Token("link_open", "a", 1);
+        linkOpening.attrSet("class", "heading-permalink");
+        linkOpening.attrSet("href", `#${id}`);
+        linkOpening.attrSet("aria-label", `Permalink to ${title}`);
+        const marker = new state.Token("text", "", 0);
+        marker.content = "#";
+        const linkClosing = new state.Token("link_close", "a", -1);
+        inline.children.push(linkOpening, marker, linkClosing);
+      }
     }
   });
 
@@ -294,6 +401,7 @@ export function renderMarkdown(
   diagrams: number;
   html: string;
   internalReferences: Array<{ fragment?: string; target: Page }>;
+  math: number;
 } {
   page.headings = [];
   const environment: RenderEnvironment = {
@@ -305,6 +413,7 @@ export function renderMarkdown(
     page,
     site,
     diagramCount: 0,
+    mathCount: 0,
   };
   const markdown = createMarkdown(environment);
   const html = markdown.render(page.body, environment);
@@ -314,5 +423,6 @@ export function renderMarkdown(
     diagrams: environment.diagramCount,
     html,
     internalReferences: environment.internalReferences,
+    math: environment.mathCount,
   };
 }

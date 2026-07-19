@@ -20,12 +20,18 @@ export type Frontmatter = Record<string, unknown> & {
 };
 
 export type SiteSettings = {
+  author?: string;
   title?: string;
   description?: string;
   lang: string;
   basePath: string;
   url?: string;
   logo?: string;
+  image?: string;
+};
+
+export type MarkdownSettings = {
+  math: boolean;
 };
 
 export type ThemeSettings = {
@@ -40,6 +46,7 @@ export type InkpathConfig = {
   contentDir: string;
   outputDir: string;
   publicDir: string;
+  markdown: MarkdownSettings;
   site: SiteSettings;
   theme: ThemeSettings;
 };
@@ -48,6 +55,7 @@ export type PageKind = "home" | "section" | "page";
 
 export type Page = {
   attributes: Frontmatter;
+  backlinks: Page[];
   body: string;
   children: Page[];
   depth: number;
@@ -78,6 +86,8 @@ export type Site = {
 export type BuildResult = {
   diagrams: number;
   elapsedMs: number;
+  math: number;
+  orphans: number;
   pages: number;
   site: Site;
 };

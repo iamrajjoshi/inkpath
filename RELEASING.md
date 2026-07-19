@@ -51,10 +51,8 @@ pnpm package:check
 Commit and push the version change. Create a tag with the same version and push it:
 
 ```bash
-git tag v0.1.1
-git push origin v0.1.1
+git tag vX.Y.Z
+git push origin vX.Y.Z
 ```
-
-The `v0.1.0` tag already belongs to the original scoped-package release. The first tag-driven release for `inkpath` should therefore use `0.1.1` or newer.
 
 The release workflow checks the tag, installs the packed package in a temporary project, and publishes it to npm. It downloads the registry archive, records its SHA-256 checksum, and attaches both files to a GitHub release. Rerunning the workflow won't try to republish an existing version.

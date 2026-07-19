@@ -20,8 +20,9 @@ try {
   await writeFile(path.join(project, "package.json"), '{"private":true,"type":"module"}\n');
   await writeFile(
     path.join(project, "content", "INDEX.md"),
-    "---\ntitle: Package check\ndescription: A site built from the packed npm artifact.\n---\n\n# Included heading\n",
+    "---\ntitle: Package check\ndescription: A site built from the packed npm artifact.\n---\n\n# Included heading\n\nInline math: $x + y$.\n\n```mermaid\nflowchart LR\n  accTitle: Package check\n  accDescr: The source becomes a generated page.\n  source[Source] --> page[Page]\n```\n",
   );
+  await writeFile(path.join(project, "inkpath.yaml"), "markdown:\n  math: true\n");
 
   await execute("npm", ["pack", "--pack-destination", packages], {
     cwd: repositoryRoot,
@@ -47,6 +48,10 @@ try {
 
   await execute(binary, ["build"], { cwd: project });
   await access(path.join(project, "site", "index.html"));
+  await access(path.join(project, "site", "_inkpath", "katex", "katex.min.css"));
+  const browserFiles = await readdir(path.join(project, "site", "_inkpath"));
+  assert.ok(browserFiles.some((file) => /^inkpath-[A-Z0-9]+\.js$/.test(file)));
+  assert.ok((await readdir(path.join(project, "site", "_inkpath", "chunks"))).length > 10);
 
   const imported = await execute(
     process.execPath,

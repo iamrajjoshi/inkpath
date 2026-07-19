@@ -58,6 +58,8 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   const firstBuild = await buildSite(project);
   assert.equal(firstBuild.pages, 4);
   assert.equal(firstBuild.diagrams, 1);
+  assert.equal(firstBuild.math, 2);
+  assert.equal(firstBuild.orphans, 1);
 
   const output = path.join(project, "site");
   const firstPage = await readFile(path.join(output, "foundations", "first", "index.html"), "utf8");
@@ -83,7 +85,11 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   assert.doesNotMatch(homePage, /class="site-mark"/);
   assert.match(firstPage, /This first sentence becomes the automatic summary\./);
   assert.match(firstPage, /<li>F1<\/li>/);
-  assert.match(sectionPage, /<span class="content-list__meta">F1<\/span>/);
+  assert.match(sectionPage, /<span class="content-list__meta">F1 · 8 minutes · Beginner<\/span>/);
+  assert.match(
+    firstPage,
+    /<ul class="page-tags" aria-label="Tags"><li>reliability<\/li><li>storage<\/li><\/ul>/,
+  );
   assert.match(firstPage, /href="\/docs\/foundations\/second\/#second-section"/);
   assert.match(firstPage, /href="\/docs\/_content\/01-foundations\/sample\.txt"/);
   assert.match(firstPage, /class="footnote-ref"/);
@@ -122,16 +128,48 @@ test("builds deterministic static pages with the complete Markdown surface", asy
     firstPage,
     /<p class="annotation__label" id="__inkpath-annotation-2-label">Warning<\/p>/,
   );
+  assert.match(
+    firstPage,
+    /<aside class="annotation annotation--tip" role="note" aria-labelledby="__inkpath-annotation-3-label">/,
+  );
+  assert.match(
+    firstPage,
+    /<p class="annotation__label" id="__inkpath-annotation-3-label">Trace the boundary<\/p>/,
+  );
+  assert.match(
+    firstPage,
+    /<details class="annotation annotation--important" role="note" aria-labelledby="__inkpath-annotation-4-label">/,
+  );
+  assert.match(
+    firstPage,
+    /<summary class="annotation__label" id="__inkpath-annotation-4-label">Optional detail<\/summary>/,
+  );
+  assert.doesNotMatch(firstPage, /<details[^>]+open/);
   assert.match(firstPage, /<blockquote>\s*<p>\[!note\]/);
   assert.equal(firstPage.match(/class="annotation annotation--note"/g)?.length, 1);
   assert.match(firstPage, /class="hljs language-ts"/);
   assert.match(firstPage, /&amp;lt;script&amp;gt;|&lt;script&gt;/);
   assert.doesNotMatch(firstPage, /<script>alert/);
   assert.match(firstPage, /data-inkpath-diagram/);
-  assert.match(firstPage, /src="\/docs\/_inkpath\/inkpath\.js"/);
-  assert.doesNotMatch(secondPage, /inkpath\.js/);
+  const mermaidEntry = firstPage.match(/src="\/docs\/_inkpath\/(inkpath-[A-Z0-9]+\.js)"/)?.[1];
+  assert.ok(mermaidEntry);
+  const mermaidEntrySource = await readFile(path.join(output, "_inkpath", mermaidEntry), "utf8");
+  assert.ok(mermaidEntrySource.length < 5_000);
+  assert.match(mermaidEntrySource, /import\("\.\/chunks\//);
+  const chunks = await readdir(path.join(output, "_inkpath", "chunks"));
+  assert.ok(chunks.length > 10);
+  assert.ok(chunks.every((file) => /-[A-Z0-9]+\.js$/.test(file)));
+  assert.doesNotMatch(secondPage, /inkpath-[A-Z0-9]+\.js/);
+  assert.match(firstPage, /class="katex"/);
+  assert.match(firstPage, /class="katex-display"/);
+  assert.match(firstPage, /href="\/docs\/_inkpath\/katex\/katex\.min\.css"/);
+  assert.doesNotMatch(secondPage, /katex\.min\.css/);
   assert.match(secondPage, /id="repeat"/);
   assert.match(secondPage, /id="repeat-2"/);
+  assert.match(
+    secondPage,
+    /<a class="heading-permalink" href="#repeat-2" aria-label="Permalink to Repeat">#<\/a>/,
+  );
   assert.match(secondPage, /The explicit summary wins over the body\./);
   assert.match(
     secondPage,
@@ -148,6 +186,10 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   assert.doesNotMatch(firstPage, /id="page-toc-title"/);
   assert.match(firstPage, /<li><a href="\/docs\/foundations\/">Foundations<\/a><\/li>/);
   assert.match(secondPage, /aria-label="Adjacent notes"/);
+  assert.match(
+    secondPage,
+    /<section class="backlinks"[\s\S]*href="\/docs\/foundations\/first\/"[\s\S]*First note/,
+  );
   assert.match(firstPage, /<footer class="page-footer">[\s\S]*aria-label="Adjacent notes"/);
   assert.doesNotMatch(homePage, /class="page-footer"/);
   assert.doesNotMatch(sectionPage, /class="page-footer"/);
@@ -158,6 +200,32 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   assert.doesNotMatch(homePage, /class="content-list__meta">\d+ notes<\/span>/);
   assert.doesNotMatch(sectionPage, /<li>\d+ notes<\/li>/);
   assert.doesNotMatch(firstPage, /__inkpath\/events/);
+  assert.match(firstPage, /<meta property="og:type" content="article">/);
+  assert.match(
+    firstPage,
+    /<meta property="og:image" content="https:\/\/example\.com\/docs\/favicon\.svg">/,
+  );
+  assert.match(firstPage, /<meta property="article:tag" content="storage">/);
+  assert.match(firstPage, /type="application\/rss\+xml"/);
+  assert.match(
+    await readFile(path.join(output, "sitemap.xml"), "utf8"),
+    /<loc>https:\/\/example\.com\/docs\/foundations\/first\/<\/loc>/,
+  );
+  assert.match(await readFile(path.join(output, "rss.xml"), "utf8"), /<title>First note<\/title>/);
+  assert.match(
+    await readFile(path.join(output, "atom.xml"), "utf8"),
+    /<author><name>Fixture Author<\/name><\/author>/,
+  );
+  assert.deepEqual(
+    JSON.parse(await readFile(path.join(output, "_inkpath", "orphans.json"), "utf8")),
+    [
+      {
+        route: "/docs/foundations/first/",
+        source: "01-foundations/01-first.md",
+        title: "First note",
+      },
+    ],
+  );
   assert.equal(
     await readFile(path.join(output, "_content", "01-foundations", "sample.txt"), "utf8"),
     "plain fixture data\n",
@@ -175,6 +243,9 @@ test("builds deterministic static pages with the complete Markdown surface", asy
     /\.site-brand:hover \.site-title,[\s\S]*background-color: var\(--accent-soft\)/,
   );
   assert.match(theme, /\.content-list__title-text \{[^}]*text-decoration-line: underline/);
+  assert.match(theme, /\.heading-permalink \{/);
+  assert.match(theme, /\.backlinks \{/);
+  assert.match(theme, /details\.annotation/);
   assert.doesNotMatch(
     theme,
     /\.content-list a:hover \.content-list__title-text[^}]*background-color/,
@@ -196,6 +267,101 @@ test("keeps the default mark when a logo is not configured", async () => {
   assert.doesNotMatch(html, /class="site-logo"/);
 });
 
+test("keeps static math optional and rejects invalid expressions", async (t) => {
+  await t.test("disabled", async () => {
+    const project = await copyFixture();
+    const config = path.join(project, "inkpath.yaml");
+    await writeFile(
+      config,
+      (await readFile(config, "utf8")).replace("markdown:\n  math: true\n", ""),
+    );
+    const result = await buildSite(project);
+    assert.equal(result.math, 0);
+    const html = await readFile(
+      path.join(project, "site", "foundations", "first", "index.html"),
+      "utf8",
+    );
+    assert.doesNotMatch(html, /class="katex"/);
+    assert.doesNotMatch(html, /katex\.min\.css/);
+    await assert.rejects(access(path.join(project, "site", "_inkpath", "katex")));
+  });
+
+  await t.test("invalid expression", async () => {
+    const project = await copyFixture();
+    const note = path.join(project, "content", "01-foundations", "01-first.md");
+    await writeFile(note, (await readFile(note, "utf8")).replace("c = a + b", "\\notACommand{"));
+    await assert.rejects(buildSite(project), /invalid KaTeX expression/);
+  });
+});
+
+test("supports callouts that start expanded", async () => {
+  const project = await copyFixture();
+  const note = path.join(project, "content", "01-foundations", "02-second.md");
+  await writeFile(
+    note,
+    `${await readFile(note, "utf8")}\n\n> [!CAUTION]+ Expanded title\n> Expanded content.\n`,
+  );
+  await buildSite(project);
+  const html = await readFile(
+    path.join(project, "site", "foundations", "second", "index.html"),
+    "utf8",
+  );
+  assert.match(
+    html,
+    /<details class="annotation annotation--caution" role="note" aria-labelledby="__inkpath-annotation-1-label" open="">/,
+  );
+  assert.match(html, />Expanded title<\/summary>/);
+});
+
+test("validates discovery and Markdown configuration", async (t) => {
+  for (const url of [
+    "notes.example.com",
+    "ftp://example.com",
+    "https://user@example.com",
+    "https://example.com/notes",
+  ]) {
+    await t.test(`site.url ${url}`, async () => {
+      const project = await copyFixture();
+      const config = path.join(project, "inkpath.yaml");
+      await writeFile(config, (await readFile(config, "utf8")).replace("https://example.com", url));
+      await assert.rejects(
+        buildSite(project),
+        /site\.url must be an absolute HTTP or HTTPS (?:URL|origin)/,
+      );
+    });
+  }
+
+  await t.test("markdown.math", async () => {
+    const project = await copyFixture();
+    const config = path.join(project, "inkpath.yaml");
+    await writeFile(config, (await readFile(config, "utf8")).replace("math: true", "math: yes"));
+    await assert.rejects(buildSite(project), /markdown\.math must be true or false/);
+  });
+
+  await t.test("site mapping", async () => {
+    const project = await copyFixture();
+    const config = path.join(project, "inkpath.yaml");
+    await writeFile(config, "site: Inkpath\n");
+    await assert.rejects(buildSite(project), /site must be a YAML mapping/);
+  });
+
+  await t.test("site without a public URL", async () => {
+    const project = await copyFixture();
+    const config = path.join(project, "inkpath.yaml");
+    await writeFile(
+      config,
+      (await readFile(config, "utf8")).replace("  url: https://example.com\n", ""),
+    );
+    await buildSite(project);
+    const output = path.join(project, "site");
+    const html = await readFile(path.join(output, "index.html"), "utf8");
+    assert.doesNotMatch(html, /property="og:/);
+    await assert.rejects(access(path.join(output, "sitemap.xml")));
+    await assert.rejects(access(path.join(output, "rss.xml")));
+    await assert.rejects(access(path.join(output, "atom.xml")));
+  });
+});
+
 test("rejects unsafe or missing logo paths", async (t) => {
   for (const value of [
     "../favicon.svg",
@@ -206,7 +372,10 @@ test("rejects unsafe or missing logo paths", async (t) => {
     await t.test(value, async () => {
       const project = await copyFixture();
       const config = path.join(project, "inkpath.yaml");
-      await writeFile(config, (await readFile(config, "utf8")).replace("favicon.svg", value));
+      await writeFile(
+        config,
+        (await readFile(config, "utf8")).replace("  logo: favicon.svg", `  logo: ${value}`),
+      );
       await assert.rejects(
         buildSite(project),
         /site\.logo (?:must be a relative path inside public|does not exist in public)/,
@@ -256,7 +425,11 @@ test("uses a project-owned stylesheet instead of the generated theme", async () 
     ":root { --ink: #102a2a; }\n",
   );
   await assert.rejects(access(path.join(output, "_inkpath", "theme.css")));
-  await access(path.join(output, "_inkpath", "inkpath.js"));
+  assert.ok(
+    (await readdir(path.join(output, "_inkpath"))).some((file) =>
+      /^inkpath-[A-Z0-9]+\.js$/.test(file),
+    ),
+  );
 });
 
 test("rejects unsafe or invalid project-owned stylesheets", async (t) => {
@@ -449,7 +622,10 @@ test("supports arbitrarily nested sections, lists, links, and local pagination",
   assert.match(oneHtml, /href="\/docs\/foundations\/layer-one\/middle\/"/);
   assert.doesNotMatch(oneHtml, /href="\/docs\/foundations\/layer-one\/middle\/leaf\/"/);
   assert.match(twoHtml, /href="\/docs\/foundations\/layer-one\/middle\/leaf\/"/);
-  assert.doesNotMatch(twoHtml, /href="\/docs\/foundations\/layer-one\/middle\/leaf\/alpha\/"/);
+  assert.match(
+    twoHtml,
+    /<section class="backlinks"[\s\S]*href="\/docs\/foundations\/layer-one\/middle\/leaf\/alpha\/"/,
+  );
   assert.match(threeHtml, /href="\/docs\/foundations\/layer-one\/middle\/leaf\/alpha\/"/);
   assert.match(threeHtml, /href="\/docs\/foundations\/layer-one\/middle\/leaf\/branch\/"/);
   assert.match(threeHtml, /href="\/docs\/foundations\/layer-one\/middle\/leaf\/beta\/"/);

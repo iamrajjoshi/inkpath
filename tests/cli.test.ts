@@ -26,7 +26,7 @@ test("the compiled CLI runs when invoked through a package-manager bin symlink",
   assert.equal(version.stdout.trim(), packageMetadata.version);
 
   const checked = await execute(process.execPath, [bin, "check", project]);
-  assert.match(checked.stdout, /Checked 4 pages \(1 diagrams\)/);
+  assert.match(checked.stdout, /Checked 4 pages \(1 diagram, 2 math expressions, 1 orphan note\)/);
 
   const built = await execute(process.execPath, [bin, "build", project]);
   assert.match(built.stdout, /Built 4 pages/);

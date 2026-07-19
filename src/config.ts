@@ -9,12 +9,17 @@ type RawConfig = {
   output?: string;
   public?: string;
   site?: {
+    author?: string;
     title?: string;
     description?: string;
     lang?: string;
     basePath?: string;
     url?: string;
     logo?: string;
+    image?: string;
+  };
+  markdown?: {
+    math?: boolean;
   };
   theme?: {
     accent?: string;
@@ -72,6 +77,36 @@ function optionalString(value: unknown, label: string): string | undefined {
     throw new Error(`${label} must be a non-empty string`);
   }
   return value.trim();
+}
+
+function optionalBoolean(value: unknown, label: string): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "boolean") throw new Error(`${label} must be true or false`);
+  return value;
+}
+
+function optionalSiteUrl(value: unknown): string | undefined {
+  const raw = optionalString(value, "site.url");
+  if (!raw) return undefined;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error("site.url must be an absolute HTTP or HTTPS URL");
+  }
+  if (
+    (url.protocol !== "http:" && url.protocol !== "https:") ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    url.pathname !== "/"
+  ) {
+    throw new Error(
+      "site.url must be an absolute HTTP or HTTPS origin without credentials, a path, a query, or a fragment",
+    );
+  }
+  return url.href.replace(/\/$/, "");
 }
 
 function optionalHexColor(value: unknown, label: string): string | undefined {
@@ -155,12 +190,27 @@ export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig>
   if (pathsOverlap(contentDir, publicDir)) {
     throw new Error("content and public directories cannot overlap");
   }
+  if (
+    raw.site !== undefined &&
+    (typeof raw.site !== "object" || raw.site === null || Array.isArray(raw.site))
+  ) {
+    throw new Error("site must be a YAML mapping");
+  }
   const site = raw.site ?? {};
+  const author = optionalString(site.author, "site.author");
   const title = optionalString(site.title, "site.title");
   const description = optionalString(site.description, "site.description");
-  const url = optionalString(site.url, "site.url");
+  const url = optionalSiteUrl(site.url);
   const logo = optionalPublicAsset(site.logo, "site.logo");
+  const image = optionalPublicAsset(site.image, "site.image");
   if (logo) await validatePublicFile(publicDir, logo, "site.logo");
+  if (image) await validatePublicFile(publicDir, image, "site.image");
+  if (
+    raw.markdown !== undefined &&
+    (typeof raw.markdown !== "object" || raw.markdown === null || Array.isArray(raw.markdown))
+  ) {
+    throw new Error("markdown must be a YAML mapping");
+  }
   if (
     raw.theme !== undefined &&
     (typeof raw.theme !== "object" || raw.theme === null || Array.isArray(raw.theme))
@@ -184,13 +234,18 @@ export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig>
     contentDir,
     outputDir,
     publicDir,
+    markdown: {
+      math: optionalBoolean(raw.markdown?.math, "markdown.math") ?? false,
+    },
     site: {
+      ...(author ? { author } : {}),
       ...(title ? { title } : {}),
       ...(description ? { description } : {}),
       lang: optionalString(site.lang, "site.lang") ?? "en",
       basePath: normalizeBasePath(optionalString(site.basePath, "site.basePath")),
       ...(url ? { url } : {}),
       ...(logo ? { logo } : {}),
+      ...(image ? { image } : {}),
     },
     theme: {
       accent: optionalHexColor(theme.accent, "theme.accent") ?? "#f36f21",

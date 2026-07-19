@@ -24,7 +24,10 @@ const mimeTypes = new Map([
   [".png", "image/png"],
   [".svg", "image/svg+xml"],
   [".txt", "text/plain; charset=utf-8"],
+  [".woff", "font/woff"],
+  [".woff2", "font/woff2"],
   [".webp", "image/webp"],
+  [".xml", "application/xml; charset=utf-8"],
 ]);
 
 function send(response: ServerResponse, status: number, body: string): void {
@@ -148,7 +151,13 @@ export async function startDevServer(projectDirectory: string, options: DevOptio
 
       const extension = path.extname(filePath).toLowerCase();
       response.setHeader("Content-Type", mimeTypes.get(extension) ?? "application/octet-stream");
-      response.setHeader("Cache-Control", "no-store");
+      const immutableAsset =
+        requestPath.startsWith("/_inkpath/chunks/") ||
+        /^\/_inkpath\/inkpath-[A-Z0-9]+\.js$/.test(requestPath);
+      response.setHeader(
+        "Cache-Control",
+        immutableAsset ? "public, max-age=31536000, immutable" : "no-store",
+      );
       if (extension === ".html") {
         const chunks: Buffer[] = [];
         const stream = createReadStream(filePath);
