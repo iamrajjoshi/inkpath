@@ -41,6 +41,37 @@ pnpm exec inkpath dev
 
 The development server watches Markdown, configuration, and public files. A successful edit rebuilds the site and refreshes the browser; a failed build leaves the last valid output in place.
 
+## One source tree, one site graph
+
+Inkpath reads the content tree, resolves page relationships, validates references, and then writes the static site. Public files pass through unchanged.
+
+```mermaid
+flowchart TB
+  accTitle: How Inkpath builds a site
+  accDescr: Inkpath reads Markdown and public files, validates the content graph, and writes HTML, CSS, assets, and Mermaid JavaScript when a page contains a diagram.
+  source["Markdown and public files"] --> build["inkpath build"]
+  build --> validate["Resolve routes, links, and assets"]
+  validate --> site["Write site/"]
+  site --> pages["HTML and CSS"]
+  site --> diagrams["Mermaid JavaScript when needed"]
+```
+
+`inkpath check` walks the same content graph without writing the output directory, so it can catch a broken page or anchor in CI.[^validation]
+
+## Markdown and its output
+
+| Feature        | What Inkpath does                                                                                              |
+| -------------- | -------------------------------------------------------------------------------------------------------------- |
+| Home page      | Turns `content/INDEX.md` into `/`.                                                                             |
+| Section order  | Turns `01-guides/INDEX.md` into `/guides/` and uses the numeric prefix only for ordering.                      |
+| Relative links | Rewrites `[Install](install.md#usage)` to its generated route and checks the page and heading.                 |
+| Callouts       | Renders `> [!WARNING]` as a labeled semantic aside.                                                            |
+| Footnotes      | Links `[^cache]` to its definition and adds a return link.                                                     |
+| Diagrams       | Checks each `mermaid` fence for an accessible title and description, then adds the local runtime to that page. |
+
+> [!TIP]
+> Use frontmatter for page metadata and filenames for structure. `order` can override filename order, while `identifier` adds a label without changing navigation.
+
 ## Markdown support
 
 - Headings, tables, nested lists, fenced code blocks, and syntax highlighting
@@ -58,3 +89,5 @@ pnpm exec inkpath build
 ```
 
 The build writes a directory of static files that can be served by GitHub Pages, Cloudflare Pages, Netlify, an object store, or a regular web server.
+
+[^validation]: Inkpath rejects missing Markdown targets, headings, images, and local files before replacing the previous successful output.
