@@ -1,6 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import YAML from "yaml";
+import { assertKnownKeys } from "./schema.js";
 import type { Frontmatter, Page, InkpathConfig, Site } from "./types.js";
 import {
   firstSentence,
@@ -21,6 +22,21 @@ type SourceDocument = {
   relativePath: string;
   sourcePath: string;
 };
+
+const FRONTMATTER_KEYS = [
+  "title",
+  "description",
+  "summary",
+  "slug",
+  "order",
+  "identifier",
+  "duration",
+  "difficulty",
+  "tags",
+  "date",
+  "updated",
+  "draft",
+] as const;
 
 async function walkMarkdown(directory: string, root = directory): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -60,6 +76,14 @@ function parseFrontmatter(
   }
 
   const attributes = (parsed ?? {}) as Frontmatter;
+  assertKnownKeys(attributes, FRONTMATTER_KEYS, {
+    hints: {
+      number:
+        'The obsolete "number" key is not supported; use "identifier" for display text or "order" for navigation.',
+    },
+    source: relativePath,
+    scope: "frontmatter",
+  });
   for (const key of ["title", "description", "summary", "slug", "identifier"] as const) {
     const value = attributes[key];
     if (value !== undefined && (typeof value !== "string" || !value.trim())) {

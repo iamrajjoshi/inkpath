@@ -41,9 +41,53 @@ export function normalizeRoute(route: string): string {
   return normalized === "/" ? normalized : `${normalized.replace(/\/$/, "")}/`;
 }
 
+function hasAsciiControlCharacter(value: string, includeSpace = false): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index);
+    if (codeUnit === 0x7f || codeUnit < (includeSpace ? 0x21 : 0x20)) return true;
+  }
+  return false;
+}
+
 export function normalizeBasePath(basePath: string | undefined): string {
   if (!basePath || basePath === "/") return "";
-  return `/${basePath}`.replace(/\/{2,}/g, "/").replace(/\/$/, "");
+  const invalid = (reason: string): never => {
+    throw new Error(
+      `site.basePath must be / or a normalized URL path such as /notes without a trailing slash (${reason})`,
+    );
+  };
+
+  if (!basePath.startsWith("/")) invalid("it must start with /");
+  if (basePath.endsWith("/")) invalid("it must not end with /");
+  if (basePath.includes("//")) invalid("it must not contain empty path segments");
+  if (basePath.includes("\\")) invalid("it must not contain backslashes");
+  if (basePath.includes("?")) invalid("it must not contain a query");
+  if (basePath.includes("#")) invalid("it must not contain a fragment");
+  if (hasAsciiControlCharacter(basePath, true)) {
+    invalid("spaces and control characters must be percent-encoded");
+  }
+
+  const segments = basePath.slice(1).split("/");
+  for (const segment of segments) {
+    let decoded = "";
+    try {
+      decoded = decodeURIComponent(segment);
+    } catch {
+      invalid("it contains malformed percent-encoding");
+    }
+    if (decoded === "." || decoded === "..") invalid("dot segments are not allowed");
+    if (decoded.includes("/") || decoded.includes("\\")) {
+      invalid("encoded path separators are not allowed");
+    }
+    if (hasAsciiControlCharacter(decoded)) {
+      invalid("encoded control characters are not allowed");
+    }
+  }
+  if (new URL(basePath, "https://inkpath.invalid").pathname !== basePath) {
+    invalid("characters that require percent-encoding must already be percent-encoded");
+  }
+
+  return basePath;
 }
 
 export function siteUrl(basePath: string, route: string): string {

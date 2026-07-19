@@ -4,7 +4,7 @@ export type Heading = {
   title: string;
 };
 
-export type Frontmatter = Record<string, unknown> & {
+export type Frontmatter = {
   title?: string;
   description?: string;
   summary?: string;
@@ -37,6 +37,9 @@ export type MarkdownSettings = {
 export type ThemeSettings = {
   accent: string;
   interactive: string;
+  interactiveHover: string;
+  showListDetails: boolean;
+  showPageDetails: boolean;
   stylesheet?: string;
   subtle: string;
 };

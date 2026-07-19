@@ -4,9 +4,9 @@ import { cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { build as esbuild, version as esbuildVersion } from "esbuild";
+import { build as esbuild } from "esbuild";
+import { contributingPackageRoots, renderThirdPartyNotices } from "./notices.js";
 import { mermaidClientSource } from "./theme.js";
-import { INKPATH_VERSION } from "./version.js";
 
 export type MermaidAssets = {
   directory: string;
@@ -14,13 +14,23 @@ export type MermaidAssets = {
 };
 
 const require = createRequire(import.meta.url);
+const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const thirdPartyNoticesName = "THIRD_PARTY_NOTICES.txt";
 let mermaidAssetsPromise: Promise<MermaidAssets> | undefined;
 
-async function packageVersion(name: string): Promise<string> {
-  const packagePath = require.resolve(`${name}/package.json`);
-  const parsed = JSON.parse(await readFile(packagePath, "utf8")) as { version?: unknown };
-  if (typeof parsed.version !== "string") throw new Error(`${name} has no package version`);
-  return parsed.version;
+async function assetCacheIdentity(directory: string, files: string[]): Promise<string> {
+  const identity = createHash("sha256");
+  for (const file of files) {
+    identity
+      .update(file)
+      .update("\0")
+      .update(await readFile(path.join(directory, file)));
+  }
+  identity
+    .update(thirdPartyNoticesName)
+    .update("\0")
+    .update(await readFile(path.join(directory, thirdPartyNoticesName)));
+  return identity.digest("hex");
 }
 
 async function readManifest(directory: string): Promise<MermaidAssets | undefined> {
@@ -28,10 +38,15 @@ async function readManifest(directory: string): Promise<MermaidAssets | undefine
     const parsed = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8")) as {
       entry?: unknown;
       files?: unknown;
+      identity?: unknown;
+      notice?: unknown;
     };
     if (
       typeof parsed.entry !== "string" ||
       !/^inkpath-[A-Z0-9]+\.js$/.test(parsed.entry) ||
+      typeof parsed.identity !== "string" ||
+      !/^[a-f0-9]{64}$/.test(parsed.identity) ||
+      parsed.notice !== thirdPartyNoticesName ||
       !Array.isArray(parsed.files) ||
       parsed.files.some(
         (file) =>
@@ -42,7 +57,10 @@ async function readManifest(directory: string): Promise<MermaidAssets | undefine
     ) {
       return undefined;
     }
-    for (const file of parsed.files as string[]) await readFile(path.join(directory, file));
+    if (path.basename(directory) !== `mermaid-${parsed.identity}`) return undefined;
+    if ((await assetCacheIdentity(directory, parsed.files as string[])) !== parsed.identity) {
+      return undefined;
+    }
     return { directory, entry: parsed.entry };
   } catch {
     return undefined;
@@ -50,24 +68,13 @@ async function readManifest(directory: string): Promise<MermaidAssets | undefine
 }
 
 async function createMermaidAssets(): Promise<MermaidAssets> {
-  const mermaidVersion = await packageVersion("mermaid");
-  const cacheKey = createHash("sha256")
-    .update([INKPATH_VERSION, esbuildVersion, mermaidVersion, mermaidClientSource].join("\0"))
-    .digest("hex")
-    .slice(0, 20);
   const cacheRoot = path.join(os.tmpdir(), "inkpath-assets");
-  const directory = path.join(cacheRoot, `mermaid-${cacheKey}`);
-  const cached = await readManifest(directory);
-  if (cached) return cached;
-  await rm(directory, { recursive: true, force: true });
-
   await mkdir(cacheRoot, { recursive: true });
-  const temporary = path.join(cacheRoot, `.mermaid-${cacheKey}-${randomUUID()}`);
+  const temporary = path.join(cacheRoot, `.mermaid-${randomUUID()}`);
   await mkdir(temporary);
   try {
-    const moduleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
     const result = await esbuild({
-      absWorkingDir: moduleRoot,
+      absWorkingDir: packageRoot,
       bundle: true,
       chunkNames: "chunks/[name]-[hash]",
       entryNames: "inkpath-[hash]",
@@ -80,7 +87,7 @@ async function createMermaidAssets(): Promise<MermaidAssets> {
       stdin: {
         contents: mermaidClientSource,
         loader: "js",
-        resolveDir: moduleRoot,
+        resolveDir: packageRoot,
         sourcefile: "inkpath-mermaid-client.js",
       },
       target: ["es2022"],
@@ -93,7 +100,7 @@ async function createMermaidAssets(): Promise<MermaidAssets> {
     const files = Object.keys(result.metafile.outputs)
       .map((output) =>
         path
-          .relative(temporary, path.isAbsolute(output) ? output : path.resolve(moduleRoot, output))
+          .relative(temporary, path.isAbsolute(output) ? output : path.resolve(packageRoot, output))
           .split(path.sep)
           .join("/"),
       )
@@ -101,18 +108,47 @@ async function createMermaidAssets(): Promise<MermaidAssets> {
     if (files.some((file) => file.startsWith("../"))) {
       throw new Error("Mermaid browser assets were written outside their cache directory");
     }
+    const packageRoots = await contributingPackageRoots(result.metafile, packageRoot);
+    const notices = await renderThirdPartyNotices(packageRoots);
+    await writeFile(path.join(temporary, thirdPartyNoticesName), notices, "utf8");
+
+    const identity = await assetCacheIdentity(temporary, files);
+    const directory = path.join(cacheRoot, `mermaid-${identity}`);
     await writeFile(
       path.join(temporary, "manifest.json"),
-      `${JSON.stringify({ entry, files, inkpath: INKPATH_VERSION, mermaid: mermaidVersion }, null, 2)}\n`,
+      `${JSON.stringify({ entry, files, identity, notice: thirdPartyNoticesName }, null, 2)}\n`,
       "utf8",
     );
+    const cached = await readManifest(directory);
+    if (cached) {
+      await rm(temporary, { recursive: true, force: true });
+      return cached;
+    }
     try {
       await rename(temporary, directory);
     } catch (error) {
       const existing = await readManifest(directory);
-      if (!existing) throw error;
-      await rm(temporary, { recursive: true, force: true });
-      return existing;
+      if (existing) {
+        await rm(temporary, { recursive: true, force: true });
+        return existing;
+      }
+
+      const invalid = `${directory}.invalid-${randomUUID()}`;
+      try {
+        await rename(directory, invalid);
+      } catch {
+        // Another process may have removed or replaced the same invalid cache entry.
+      }
+      try {
+        await rename(temporary, directory);
+      } catch {
+        const concurrent = await readManifest(directory);
+        if (!concurrent) throw error;
+        await rm(temporary, { recursive: true, force: true });
+        return concurrent;
+      } finally {
+        await rm(invalid, { recursive: true, force: true });
+      }
     }
     return { directory, entry };
   } catch (error) {
@@ -148,4 +184,5 @@ export async function copyKatexAssets(destination: string): Promise<void> {
   await cp(path.join(packageRoot, "dist", "fonts"), path.join(destination, "fonts"), {
     recursive: true,
   });
+  await cp(path.join(packageRoot, "LICENSE"), path.join(destination, "LICENSE.txt"));
 }

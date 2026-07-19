@@ -1,6 +1,7 @@
 import { access, lstat, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import YAML from "yaml";
+import { assertKnownKeys } from "./schema.js";
 import type { InkpathConfig } from "./types.js";
 import { assertInsideProject, isPathWithin, normalizeBasePath, pathsOverlap } from "./utils.js";
 
@@ -24,10 +25,35 @@ type RawConfig = {
   theme?: {
     accent?: string;
     interactive?: string;
+    interactiveHover?: string;
+    showListDetails?: boolean;
+    showPageDetails?: boolean;
     stylesheet?: string;
     subtle?: string;
   };
 };
+
+const CONFIG_KEYS = ["content", "output", "public", "site", "markdown", "theme"] as const;
+const SITE_KEYS = [
+  "author",
+  "title",
+  "description",
+  "lang",
+  "basePath",
+  "url",
+  "logo",
+  "image",
+] as const;
+const MARKDOWN_KEYS = ["math"] as const;
+const THEME_KEYS = [
+  "accent",
+  "interactive",
+  "interactiveHover",
+  "showListDetails",
+  "showPageDetails",
+  "stylesheet",
+  "subtle",
+] as const;
 
 async function exists(filePath: string): Promise<boolean> {
   try {
@@ -165,6 +191,10 @@ export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig>
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       throw new Error("inkpath.yaml must contain a YAML mapping");
     }
+    assertKnownKeys(parsed, CONFIG_KEYS, {
+      source: "inkpath.yaml",
+      scope: "configuration",
+    });
     raw = parsed as RawConfig;
   }
 
@@ -197,6 +227,7 @@ export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig>
     throw new Error("site must be a YAML mapping");
   }
   const site = raw.site ?? {};
+  assertKnownKeys(site, SITE_KEYS, { source: "inkpath.yaml", scope: "site" });
   const author = optionalString(site.author, "site.author");
   const title = optionalString(site.title, "site.title");
   const description = optionalString(site.description, "site.description");
@@ -211,6 +242,11 @@ export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig>
   ) {
     throw new Error("markdown must be a YAML mapping");
   }
+  const markdown = raw.markdown ?? {};
+  assertKnownKeys(markdown, MARKDOWN_KEYS, {
+    source: "inkpath.yaml",
+    scope: "markdown",
+  });
   if (
     raw.theme !== undefined &&
     (typeof raw.theme !== "object" || raw.theme === null || Array.isArray(raw.theme))
@@ -218,24 +254,32 @@ export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig>
     throw new Error("theme must be a YAML mapping");
   }
   const theme = raw.theme ?? {};
+  assertKnownKeys(theme, THEME_KEYS, { source: "inkpath.yaml", scope: "theme" });
   const stylesheet = optionalPublicAsset(theme.stylesheet, "theme.stylesheet");
   if (stylesheet && !stylesheet.toLowerCase().endsWith(".css")) {
     throw new Error("theme.stylesheet must point to a CSS file in public");
   }
   if (
     stylesheet &&
-    [theme.accent, theme.interactive, theme.subtle].some((value) => value !== undefined)
+    [theme.accent, theme.interactive, theme.interactiveHover, theme.subtle].some(
+      (value) => value !== undefined,
+    )
   ) {
     throw new Error("theme.stylesheet cannot be combined with theme color settings");
   }
   if (stylesheet) await validatePublicFile(publicDir, stylesheet, "theme.stylesheet");
+  const showPageDetails = optionalBoolean(theme.showPageDetails, "theme.showPageDetails") ?? true;
+  const interactive = optionalHexColor(theme.interactive, "theme.interactive") ?? "#0f766e";
+  const interactiveHover =
+    optionalHexColor(theme.interactiveHover, "theme.interactiveHover") ??
+    (theme.interactive === undefined ? "#0b5f59" : interactive);
   return {
     projectRoot,
     contentDir,
     outputDir,
     publicDir,
     markdown: {
-      math: optionalBoolean(raw.markdown?.math, "markdown.math") ?? false,
+      math: optionalBoolean(markdown.math, "markdown.math") ?? false,
     },
     site: {
       ...(author ? { author } : {}),
@@ -248,10 +292,14 @@ export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig>
       ...(image ? { image } : {}),
     },
     theme: {
-      accent: optionalHexColor(theme.accent, "theme.accent") ?? "#f36f21",
-      interactive: optionalHexColor(theme.interactive, "theme.interactive") ?? "#a54016",
+      accent: optionalHexColor(theme.accent, "theme.accent") ?? "#2dd4bf",
+      interactive,
+      interactiveHover,
+      showListDetails:
+        optionalBoolean(theme.showListDetails, "theme.showListDetails") ?? showPageDetails,
+      showPageDetails,
       ...(stylesheet ? { stylesheet } : {}),
-      subtle: optionalHexColor(theme.subtle, "theme.subtle") ?? "#fff0e8",
+      subtle: optionalHexColor(theme.subtle, "theme.subtle") ?? "#f0fdfa",
     },
   };
 }

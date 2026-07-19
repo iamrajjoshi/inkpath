@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import {
   access,
   cp,
@@ -24,6 +25,18 @@ import { INKPATH_VERSION } from "../src/version.js";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const fixtureRoot = path.join(repositoryRoot, "tests", "fixtures", "site");
+const require = createRequire(import.meta.url);
+
+async function packageDetails(name: string): Promise<{ license: string; version: string }> {
+  const packageRoot = path.dirname(require.resolve(`${name}/package.json`));
+  const metadata = JSON.parse(await readFile(path.join(packageRoot, "package.json"), "utf8")) as {
+    version: string;
+  };
+  return {
+    license: await readFile(path.join(packageRoot, "LICENSE"), "utf8"),
+    version: metadata.version,
+  };
+}
 
 async function copyFixture(): Promise<string> {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "inkpath-test-"));
@@ -83,6 +96,7 @@ test("builds deterministic static pages with the complete Markdown surface", asy
     /<img class="site-logo" src="\/docs\/favicon\.svg" alt="" width="28" height="28">/,
   );
   assert.doesNotMatch(homePage, /class="site-mark"/);
+  assert.match(homePage, /class="content-list__meta">3 hours<\/span>/);
   assert.match(firstPage, /This first sentence becomes the automatic summary\./);
   assert.match(firstPage, /<li>F1<\/li>/);
   assert.match(sectionPage, /<span class="content-list__meta">F1 · 8 minutes · Beginner<\/span>/);
@@ -159,10 +173,22 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   const chunks = await readdir(path.join(output, "_inkpath", "chunks"));
   assert.ok(chunks.length > 10);
   assert.ok(chunks.every((file) => /-[A-Z0-9]+\.js$/.test(file)));
+  const thirdPartyNotices = await readFile(
+    path.join(output, "_inkpath", "THIRD_PARTY_NOTICES.txt"),
+    "utf8",
+  );
+  assert.match(thirdPartyNotices, /mermaid@11\.16\.0/);
+  assert.match(thirdPartyNotices, /dompurify@3\.4\.12/);
   assert.doesNotMatch(secondPage, /inkpath-[A-Z0-9]+\.js/);
   assert.match(firstPage, /class="katex"/);
   assert.match(firstPage, /class="katex-display"/);
   assert.match(firstPage, /href="\/docs\/_inkpath\/katex\/katex\.min\.css"/);
+  const katex = await packageDetails("katex");
+  assert.equal(katex.version, "0.18.0");
+  assert.equal(
+    await readFile(path.join(output, "_inkpath", "katex", "LICENSE.txt"), "utf8"),
+    katex.license,
+  );
   assert.doesNotMatch(secondPage, /katex\.min\.css/);
   assert.match(secondPage, /id="repeat"/);
   assert.match(secondPage, /id="repeat-2"/);
@@ -188,8 +214,9 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   assert.match(secondPage, /aria-label="Adjacent notes"/);
   assert.match(
     secondPage,
-    /<section class="backlinks"[\s\S]*href="\/docs\/foundations\/first\/"[\s\S]*First note/,
+    /<section class="backlinks"[\s\S]*<ul><li><a href="\/docs\/foundations\/first\/">First note<\/a><\/li><\/ul>/,
   );
+  assert.doesNotMatch(secondPage, /<section class="backlinks"[\s\S]*?<span>[\s\S]*?<\/section>/);
   assert.match(firstPage, /<footer class="page-footer">[\s\S]*aria-label="Adjacent notes"/);
   assert.doesNotMatch(homePage, /class="page-footer"/);
   assert.doesNotMatch(sectionPage, /class="page-footer"/);
@@ -233,18 +260,42 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   await readFile(path.join(output, "favicon.svg"), "utf8");
   const theme = await readFile(path.join(output, "_inkpath", "theme.css"), "utf8");
   assert.match(theme, /--reading-width: 43\.75rem/);
-  assert.match(theme, /--accent: #f36f21/);
-  assert.match(theme, /--interactive: #a54016/);
-  assert.match(theme, /--inline-code: #fff0e8/);
+  assert.match(theme, /--ink: #171513/);
+  assert.match(theme, /--muted: #56534d/);
+  assert.match(theme, /--faint: #77736b/);
+  assert.match(theme, /--line: #e7e3dc/);
+  assert.match(theme, /--willow: #2dd4bf/);
+  assert.match(theme, /--accent: var\(--willow\)/);
+  assert.match(theme, /--accent-soft: #f0fdfa/);
+  assert.match(theme, /--interactive: #0f766e/);
+  assert.match(theme, /--interactive-hover: #0b5f59/);
+  assert.match(theme, /--inline-code: #f0fdfa/);
+  assert.match(theme, /::selection \{\s*background: var\(--willow\);\s*color: var\(--ink\)/);
+  assert.match(theme, /a \{\s*color: var\(--interactive\);\s*text-decoration-color: currentColor/);
+  assert.match(
+    theme,
+    /a:hover \{\s*color: var\(--interactive-hover\);\s*text-decoration-color: var\(--willow\)/,
+  );
   assert.match(theme, /\.site-logo \{/);
   assert.match(theme, /\.breadcrumbs__separator \{/);
+  assert.match(theme, /\.site-brand:hover,\s*\.site-brand:focus-visible \{\s*color: var\(--ink\)/);
   assert.match(
     theme,
     /\.site-brand:hover \.site-title,[\s\S]*background-color: var\(--accent-soft\)/,
   );
   assert.match(theme, /\.content-list__title-text \{[^}]*text-decoration-line: underline/);
+  assert.match(
+    theme,
+    /\.content-list a:hover \.content-list__title-text \{[^}]*text-decoration-color: var\(--willow\)/,
+  );
+  assert.match(
+    theme,
+    /\.page-pagination a:hover strong \{\s*text-decoration-color: var\(--willow\)/,
+  );
   assert.match(theme, /\.heading-permalink \{/);
   assert.match(theme, /\.backlinks \{/);
+  assert.doesNotMatch(theme, /\.backlinks \{[^}]*border-top/);
+  assert.doesNotMatch(theme, /\.backlinks span \{/);
   assert.match(theme, /details\.annotation/);
   assert.doesNotMatch(
     theme,
@@ -265,6 +316,84 @@ test("keeps the default mark when a logo is not configured", async () => {
   const html = await readFile(path.join(project, "site", "index.html"), "utf8");
   assert.match(html, /<span class="site-mark" aria-hidden="true">/);
   assert.doesNotMatch(html, /class="site-logo"/);
+});
+
+test("emits licenses for exactly the generated browser assets", async (t) => {
+  async function removeMermaid(project: string): Promise<void> {
+    const note = path.join(project, "content", "01-foundations", "01-first.md");
+    await writeFile(note, (await readFile(note, "utf8")).replace(/```mermaid[\s\S]*?```\n?/, ""));
+  }
+
+  async function disableMath(project: string): Promise<void> {
+    const config = path.join(project, "inkpath.yaml");
+    await writeFile(
+      config,
+      (await readFile(config, "utf8")).replace("markdown:\n  math: true\n", ""),
+    );
+  }
+
+  await t.test("math only", async () => {
+    const project = await copyFixture();
+    await removeMermaid(project);
+    const result = await buildSite(project);
+    assert.equal(result.diagrams, 0);
+    assert.equal(result.math, 2);
+
+    const assets = path.join(project, "site", "_inkpath");
+    const katex = await packageDetails("katex");
+    assert.equal(katex.version, "0.18.0");
+    assert.equal(await readFile(path.join(assets, "katex", "LICENSE.txt"), "utf8"), katex.license);
+    await access(path.join(assets, "katex", "katex.min.css"));
+    await assert.rejects(access(path.join(assets, "THIRD_PARTY_NOTICES.txt")));
+    assert.equal(
+      (await readdir(assets)).some((file) => /^inkpath-[A-Z0-9]+\.js$/.test(file)),
+      false,
+    );
+  });
+
+  await t.test("Mermaid only", async () => {
+    const project = await copyFixture();
+    await disableMath(project);
+    const result = await buildSite(project);
+    assert.equal(result.diagrams, 1);
+    assert.equal(result.math, 0);
+
+    const assets = path.join(project, "site", "_inkpath");
+    const mermaid = await packageDetails("mermaid");
+    const notices = await readFile(path.join(assets, "THIRD_PARTY_NOTICES.txt"), "utf8");
+    assert.match(notices, new RegExp(`mermaid@${mermaid.version.replaceAll(".", "\\.")}`));
+    assert.ok(notices.includes(mermaid.license.trim()));
+    await assert.rejects(access(path.join(assets, "katex")));
+  });
+
+  await t.test("both", async () => {
+    const project = await copyFixture();
+    const result = await buildSite(project);
+    assert.equal(result.diagrams, 1);
+    assert.equal(result.math, 2);
+
+    const assets = path.join(project, "site", "_inkpath");
+    await access(path.join(assets, "THIRD_PARTY_NOTICES.txt"));
+    await access(path.join(assets, "katex", "LICENSE.txt"));
+  });
+
+  await t.test("neither", async () => {
+    const project = await copyFixture();
+    await removeMermaid(project);
+    await disableMath(project);
+    const result = await buildSite(project);
+    assert.equal(result.diagrams, 0);
+    assert.equal(result.math, 0);
+
+    const assets = path.join(project, "site", "_inkpath");
+    await assert.rejects(access(path.join(assets, "THIRD_PARTY_NOTICES.txt")));
+    await assert.rejects(access(path.join(assets, "katex")));
+    await assert.rejects(access(path.join(assets, "chunks")));
+    assert.equal(
+      (await readdir(assets)).some((file) => /^inkpath-[A-Z0-9]+\.js$/.test(file)),
+      false,
+    );
+  });
 });
 
 test("keeps static math optional and rejects invalid expressions", async (t) => {
@@ -362,6 +491,131 @@ test("validates discovery and Markdown configuration", async (t) => {
   });
 });
 
+test("rejects unknown configuration keys with source-specific suggestions", async (t) => {
+  const cases = [
+    {
+      name: "root",
+      update: (source: string) => `${source}\ncontnet: notes\n`,
+      expected: /inkpath\.yaml: unknown configuration key "contnet"\. Did you mean "content"\?/,
+    },
+    {
+      name: "site",
+      update: (source: string) => source.replace("basePath: /docs", "basepath: /docs"),
+      expected: /inkpath\.yaml: unknown site key "basepath"\. Did you mean "basePath"\?/,
+    },
+    {
+      name: "markdown",
+      update: (source: string) => source.replace("math: true", "maths: true"),
+      expected: /inkpath\.yaml: unknown markdown key "maths"\. Did you mean "math"\?/,
+    },
+    {
+      name: "theme page details",
+      update: (source: string) => `${source}\ntheme:\n  showPageDetail: false\n`,
+      expected:
+        /inkpath\.yaml: unknown theme key "showPageDetail"\. Did you mean "showPageDetails"\?/,
+    },
+    {
+      name: "theme list details",
+      update: (source: string) => `${source}\ntheme:\n  showListDetail: false\n`,
+      expected:
+        /inkpath\.yaml: unknown theme key "showListDetail"\. Did you mean "showListDetails"\?/,
+    },
+    {
+      name: "theme interactive hover",
+      update: (source: string) => `${source}\ntheme:\n  interactiveHove: "#0b5f59"\n`,
+      expected:
+        /inkpath\.yaml: unknown theme key "interactiveHove"\. Did you mean "interactiveHover"\?/,
+    },
+  ] as const;
+
+  for (const example of cases) {
+    await t.test(example.name, async () => {
+      const project = await copyFixture();
+      const config = path.join(project, "inkpath.yaml");
+      await writeFile(config, example.update(await readFile(config, "utf8")));
+      await assert.rejects(loadConfig(project), example.expected);
+    });
+  }
+});
+
+test("rejects unknown frontmatter keys and explains the obsolete number key", async (t) => {
+  await t.test("misspelling", async () => {
+    const project = await copyFixture();
+    const note = path.join(project, "content", "01-foundations", "01-first.md");
+    await writeFile(
+      note,
+      (await readFile(note, "utf8")).replace(
+        "title: First note",
+        "title: First note\ndescripton: Typo",
+      ),
+    );
+    await assert.rejects(
+      buildSite(project),
+      /01-foundations\/01-first\.md: unknown frontmatter key "descripton"\. Did you mean "description"\?/,
+    );
+  });
+
+  await t.test("obsolete number", async () => {
+    const project = await copyFixture();
+    const note = path.join(project, "content", "01-foundations", "01-first.md");
+    await writeFile(
+      note,
+      (await readFile(note, "utf8")).replace("identifier: F1", "identifier: F1\nnumber: F1"),
+    );
+    await assert.rejects(
+      buildSite(project),
+      /01-foundations\/01-first\.md: unknown frontmatter key "number"\.[\s\S]*use "identifier" for display text or "order" for navigation/,
+    );
+  });
+});
+
+test("requires site.basePath to be a safe normalized URL path", async (t) => {
+  const invalidPaths = [
+    "notes",
+    "/notes/",
+    "//notes",
+    "/notes//v1",
+    "/notes/./v1",
+    "/notes/%2e%2e/v1",
+    "/notes?draft=1",
+    "/notes#intro",
+    "/notes/%ZZ",
+    "/notes\\admin",
+    "/notes/%2Fadmin",
+    "/notes/%5cadmin",
+    "/notes/%00",
+    "/notes/<admin>",
+  ];
+
+  for (const basePath of invalidPaths) {
+    await t.test(basePath, async () => {
+      const project = await copyFixture();
+      const config = path.join(project, "inkpath.yaml");
+      await writeFile(
+        config,
+        (await readFile(config, "utf8")).replace(
+          "basePath: /docs",
+          `basePath: ${JSON.stringify(basePath)}`,
+        ),
+      );
+      await assert.rejects(
+        loadConfig(project),
+        /site\.basePath must be \/ or a normalized URL path such as \/notes/,
+      );
+    });
+  }
+
+  await t.test("accepts nested and percent-encoded segments", async () => {
+    const project = await copyFixture();
+    const config = path.join(project, "inkpath.yaml");
+    await writeFile(
+      config,
+      (await readFile(config, "utf8")).replace("basePath: /docs", "basePath: /notes/v1/%E2%9C%93"),
+    );
+    assert.equal((await loadConfig(project)).site.basePath, "/notes/v1/%E2%9C%93");
+  });
+});
+
 test("rejects unsafe or missing logo paths", async (t) => {
   for (const value of [
     "../favicon.svg",
@@ -389,15 +643,115 @@ test("supports a constrained site accent palette", async () => {
   const config = path.join(project, "inkpath.yaml");
   await writeFile(
     config,
-    `${await readFile(config, "utf8")}\ntheme:\n  accent: "#0f766e"\n  interactive: "#0f766e"\n  subtle: "#f0fdfa"\n`,
+    `${await readFile(config, "utf8")}\ntheme:\n  accent: "#38bdf8"\n  interactive: "#075985"\n  interactiveHover: "#0c4a6e"\n  subtle: "#f0f9ff"\n`,
   );
 
   await buildSite(project);
   const theme = await readFile(path.join(project, "site", "_inkpath", "theme.css"), "utf8");
-  assert.match(theme, /--accent: #0f766e/);
-  assert.match(theme, /--accent-soft: #f0fdfa/);
-  assert.match(theme, /--interactive: #0f766e/);
-  assert.match(theme, /--inline-code: #f0fdfa/);
+  assert.match(theme, /--willow: #38bdf8/);
+  assert.match(theme, /--accent: var\(--willow\)/);
+  assert.match(theme, /--accent-soft: #f0f9ff/);
+  assert.match(theme, /--interactive: #075985/);
+  assert.match(theme, /--interactive-hover: #0c4a6e/);
+  assert.match(theme, /--inline-code: #f0f9ff/);
+});
+
+test("uses a custom interactive color on hover when no hover color is set", async () => {
+  const project = await copyFixture();
+  const config = path.join(project, "inkpath.yaml");
+  await writeFile(config, `${await readFile(config, "utf8")}\ntheme:\n  interactive: "#075985"\n`);
+
+  const loaded = await loadConfig(project);
+  assert.equal(loaded.theme.interactive, "#075985");
+  assert.equal(loaded.theme.interactiveHover, "#075985");
+});
+
+test("can hide page details without hiding list details", async () => {
+  const project = await copyFixture();
+  const config = path.join(project, "inkpath.yaml");
+  await writeFile(
+    config,
+    `${await readFile(config, "utf8")}\ntheme:\n  showListDetails: true\n  showPageDetails: false\n`,
+  );
+
+  await buildSite(project);
+  const output = path.join(project, "site");
+  const firstPage = await readFile(path.join(output, "foundations", "first", "index.html"), "utf8");
+  const sectionPage = await readFile(path.join(output, "foundations", "index.html"), "utf8");
+  const homePage = await readFile(path.join(output, "index.html"), "utf8");
+
+  assert.match(firstPage, /aria-label="Breadcrumb"/);
+  assert.match(sectionPage, /aria-label="Breadcrumb"/);
+  assert.doesNotMatch(firstPage, /<li>F1<\/li>/);
+  assert.doesNotMatch(firstPage, /<li>8 minutes<\/li>/);
+  assert.doesNotMatch(firstPage, /<li>Beginner<\/li>/);
+  assert.doesNotMatch(firstPage, /class="page-tags"/);
+  assert.match(homePage, /class="content-list__meta">3 hours<\/span>/);
+  assert.match(sectionPage, /class="content-list__meta">F1 · 8 minutes · Beginner<\/span>/);
+  assert.match(firstPage, /<meta property="article:tag" content="storage">/);
+});
+
+test("can hide list details without hiding page details", async () => {
+  const project = await copyFixture();
+  const config = path.join(project, "inkpath.yaml");
+  await writeFile(
+    config,
+    `${await readFile(config, "utf8")}\ntheme:\n  showListDetails: false\n  showPageDetails: true\n`,
+  );
+
+  await buildSite(project);
+  const output = path.join(project, "site");
+  const firstPage = await readFile(path.join(output, "foundations", "first", "index.html"), "utf8");
+  const sectionPage = await readFile(path.join(output, "foundations", "index.html"), "utf8");
+  const homePage = await readFile(path.join(output, "index.html"), "utf8");
+
+  assert.match(firstPage, /aria-label="Breadcrumb"/);
+  assert.match(firstPage, /<li>F1<\/li>/);
+  assert.match(firstPage, /<li>8 minutes<\/li>/);
+  assert.match(firstPage, /<li>Beginner<\/li>/);
+  assert.match(firstPage, /class="page-tags"/);
+  assert.doesNotMatch(homePage, /class="content-list__meta"/);
+  assert.doesNotMatch(sectionPage, /class="content-list__meta"/);
+});
+
+test("keeps the previous combined metadata behavior when list details are omitted", async () => {
+  const project = await copyFixture();
+  const config = path.join(project, "inkpath.yaml");
+  await writeFile(config, `${await readFile(config, "utf8")}\ntheme:\n  showPageDetails: false\n`);
+
+  await buildSite(project);
+  const output = path.join(project, "site");
+  const firstPage = await readFile(path.join(output, "foundations", "first", "index.html"), "utf8");
+  const sectionPage = await readFile(path.join(output, "foundations", "index.html"), "utf8");
+  const homePage = await readFile(path.join(output, "index.html"), "utf8");
+
+  assert.match(firstPage, /aria-label="Breadcrumb"/);
+  assert.doesNotMatch(firstPage, /<li>F1<\/li>/);
+  assert.doesNotMatch(firstPage, /class="page-tags"/);
+  assert.doesNotMatch(homePage, /class="content-list__meta"/);
+  assert.doesNotMatch(sectionPage, /class="content-list__meta"/);
+});
+
+test("rejects an invalid page-details setting", async () => {
+  const project = await copyFixture();
+  const config = path.join(project, "inkpath.yaml");
+  await writeFile(
+    config,
+    `${await readFile(config, "utf8")}\ntheme:\n  showPageDetails: "false"\n`,
+  );
+
+  await assert.rejects(loadConfig(project), /theme\.showPageDetails must be true or false/);
+});
+
+test("rejects an invalid list-details setting", async () => {
+  const project = await copyFixture();
+  const config = path.join(project, "inkpath.yaml");
+  await writeFile(
+    config,
+    `${await readFile(config, "utf8")}\ntheme:\n  showListDetails: "false"\n`,
+  );
+
+  await assert.rejects(loadConfig(project), /theme\.showListDetails must be true or false/);
 });
 
 test("uses a project-owned stylesheet instead of the generated theme", async () => {
@@ -459,7 +813,7 @@ test("rejects theme colors alongside a project-owned stylesheet", async () => {
   await writeFile(path.join(project, "public", "notes.css"), "body {}\n", "utf8");
   await writeFile(
     config,
-    `${await readFile(config, "utf8")}\ntheme:\n  stylesheet: notes.css\n  accent: "#0f766e"\n`,
+    `${await readFile(config, "utf8")}\ntheme:\n  stylesheet: notes.css\n  interactiveHover: "#0b5f59"\n`,
   );
 
   await assert.rejects(
@@ -497,6 +851,19 @@ test("rejects unsafe theme color values", async (t) => {
       );
     });
   }
+});
+
+test("rejects an unsafe interactive hover color", async () => {
+  const project = await copyFixture();
+  const config = path.join(project, "inkpath.yaml");
+  await writeFile(
+    config,
+    `${await readFile(config, "utf8")}\ntheme:\n  interactiveHover: "teal"\n`,
+  );
+  await assert.rejects(
+    buildSite(project),
+    /theme\.interactiveHover must be a six-digit hexadecimal color/,
+  );
 });
 
 test("keeps generated footnote identifiers separate from heading identifiers", async () => {
@@ -547,11 +914,11 @@ test("supports arbitrarily nested sections, lists, links, and local pagination",
     ),
     writeFile(
       path.join(layerThree, "01-alpha.md"),
-      "---\ntitle: Alpha\ndescription: First deeply nested note.\norder: 1\nnumber: D1\n---\n\n- Layer one\n  - Layer two\n    - Layer three\n      - Layer four\n\nRead [Beta](03-beta.md#details), the [parent](../INDEX.md), the [home page](../../../../INDEX.md), and the [local asset](diagram.txt).\n",
+      "---\ntitle: Alpha\ndescription: First deeply nested note.\norder: 1\nidentifier: D1\n---\n\n- Layer one\n  - Layer two\n    - Layer three\n      - Layer four\n\nRead [Beta](03-beta.md#details), the [parent](../INDEX.md), the [home page](../../../../INDEX.md), and the [local asset](diagram.txt).\n",
     ),
     writeFile(
       path.join(layerThree, "03-beta.md"),
-      "---\ntitle: Beta\ndescription: Second deeply nested note.\norder: 3\nnumber: D2\n---\n\n## Details\n\nThe target fragment is stable.\n",
+      "---\ntitle: Beta\ndescription: Second deeply nested note.\norder: 3\nidentifier: D2\n---\n\n## Details\n\nThe target fragment is stable.\n",
     ),
     writeFile(path.join(layerThree, "diagram.txt"), "deep asset\n"),
   ]);

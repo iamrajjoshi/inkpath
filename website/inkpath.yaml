@@ -15,6 +15,7 @@ markdown:
   math: true
 
 theme:
-  accent: "#0f766e"
+  accent: "#2dd4bf"
   interactive: "#0f766e"
+  interactiveHover: "#0b5f59"
   subtle: "#f0fdfa"

@@ -80,6 +80,9 @@ The Mermaid entry file is small. The browser imports Mermaid only on a diagram p
 > [!TIP]
 > Use frontmatter for page metadata and filenames for structure. `order` can override filename order, while `identifier` adds a label without changing navigation.
 
+> [!NOTE] Metadata display
+> `theme.showPageDetails` controls metadata beneath a page heading. `theme.showListDetails` separately controls identifiers, duration, and difficulty in collection and note listings. `showPageDetails` defaults to `true`; an omitted `showListDetails` inherits that value.
+
 > [!IMPORTANT]- Why the orphan report is separate
 > Navigation and content links answer different questions. A note can appear in a collection but still have no incoming Markdown link. Inkpath records that note in `_inkpath/orphans.json`.
 

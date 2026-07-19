@@ -5,13 +5,15 @@ export function renderThemeCss(theme: ThemeSettings): string {
 :root {
   color-scheme: light;
   --background: #ffffff;
-  --ink: #171717;
-  --muted: #666666;
-  --faint: #707070;
-  --line: #e5e5e5;
-  --accent: ${theme.accent};
+  --ink: #171513;
+  --muted: #56534d;
+  --faint: #77736b;
+  --line: #e7e3dc;
+  --willow: ${theme.accent};
+  --accent: var(--willow);
   --accent-soft: ${theme.subtle};
   --interactive: ${theme.interactive};
+  --interactive-hover: ${theme.interactiveHover};
   --inline-code: ${theme.subtle};
   --block-code: #f6f6f6;
   --reading-width: 43.75rem;
@@ -24,6 +26,11 @@ export function renderThemeCss(theme: ThemeSettings): string {
   box-sizing: border-box;
 }
 
+::selection {
+  background: var(--willow);
+  color: var(--ink);
+}
+
 body {
   min-width: 20rem;
   margin: 0;
@@ -34,13 +41,15 @@ body {
 }
 
 a {
-  color: inherit;
-  text-decoration-color: var(--interactive);
+  color: var(--interactive);
+  text-decoration-color: currentColor;
   text-decoration-thickness: 0.13em;
   text-underline-offset: 0.12em;
 }
 
 a:hover {
+  color: var(--interactive-hover);
+  text-decoration-color: var(--willow);
   text-decoration-thickness: 0.18em;
 }
 
@@ -79,10 +88,16 @@ a:hover {
   display: inline-flex;
   min-width: 0;
   align-items: center;
+  color: var(--ink);
   gap: 0.7rem;
   font-size: 0.95rem;
   font-weight: 700;
   text-decoration: none;
+}
+
+.site-brand:hover,
+.site-brand:focus-visible {
+  color: var(--ink);
 }
 
 .site-brand:hover .site-title,
@@ -157,6 +172,11 @@ a:hover {
   color: var(--muted);
   font-size: 0.875rem;
   list-style: none;
+}
+
+.page-meta > li {
+  display: inline-flex;
+  align-items: center;
 }
 
 .page-meta > li:not(:last-child)::after {
@@ -476,7 +496,6 @@ details.annotation[open] > summary.annotation__label {
 
 .footnote-ref a,
 .footnote-backref {
-  color: var(--interactive);
   text-decoration: none;
 }
 
@@ -535,12 +554,13 @@ details.annotation[open] > summary.annotation__label {
 
 .content-list__title-text {
   text-decoration-line: underline;
-  text-decoration-color: var(--interactive);
+  text-decoration-color: currentColor;
   text-decoration-thickness: 0.13em;
   text-underline-offset: 0.12em;
 }
 
 .content-list a:hover .content-list__title-text {
+  text-decoration-color: var(--willow);
   text-decoration-thickness: 0.18em;
 }
 
@@ -560,8 +580,6 @@ details.annotation[open] > summary.annotation__label {
 
 .backlinks {
   margin-top: 3rem;
-  padding-top: 0.8rem;
-  border-top: 1px solid var(--line);
 }
 
 .backlinks h2 {
@@ -581,12 +599,6 @@ details.annotation[open] > summary.annotation__label {
 
 .backlinks a {
   font-weight: 650;
-}
-
-.backlinks span {
-  display: block;
-  color: var(--muted);
-  font-size: 0.85rem;
 }
 
 .page-footer {
@@ -622,9 +634,13 @@ details.annotation[open] > summary.annotation__label {
   font-size: 0.9rem;
   font-weight: 650;
   text-decoration-line: underline;
-  text-decoration-color: var(--interactive);
+  text-decoration-color: currentColor;
   text-decoration-thickness: 0.13em;
   text-underline-offset: 0.12em;
+}
+
+.page-pagination a:hover strong {
+  text-decoration-color: var(--willow);
 }
 
 @media (max-width: 42rem) {

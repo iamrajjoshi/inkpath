@@ -2,7 +2,8 @@
 
 Inkpath builds static notes and documentation sites from Markdown. It writes plain HTML and CSS and serves a live preview while you edit. Built pages use browser JavaScript only when they contain a Mermaid diagram.
 
-The project website is built with Inkpath and lives at [inkpath.dev](https://inkpath.dev).
+> [!NOTE]
+> [See a live Inkpath demo](https://inkpath.dev/).
 
 ## Install
 
@@ -79,7 +80,7 @@ slug: storage-engines
 ---
 ```
 
-`title`, `description`, `summary`, `order`, `identifier`, `slug`, `date`, `updated`, `duration`, `difficulty`, `tags`, and `draft` are supported. A numeric filename or `order` controls navigation; `identifier` is display text only. Inkpath renders the identifier, dates, duration, difficulty, and tags on the page.
+`title`, `description`, `summary`, `order`, `identifier`, `slug`, `date`, `updated`, `duration`, `difficulty`, `tags`, and `draft` are supported. Unknown keys fail validation so misspellings do not silently disappear. A numeric filename or `order` controls navigation; `identifier` is display text only. The obsolete `number` key is not supported. Inkpath renders the identifier, dates, duration, difficulty, and tags on the page by default. `theme.showPageDetails` controls metadata below page headings, while `theme.showListDetails` controls identifiers, duration, and difficulty in collection and note listings. `showPageDetails` defaults to `true`; an omitted `showListDetails` inherits that value. Breadcrumbs remain visible when page details are hidden.
 
 Relative links use source filenames. Inkpath rewrites them to generated routes and rejects missing pages, headings, images, or files.
 
@@ -120,7 +121,9 @@ flowchart LR
 ```
 ````
 
-Mermaid ships locally and runs with strict security settings. Inkpath writes a small hashed ESM entry and split, hashed chunks. The browser loads Mermaid only on diagram pages, then loads the implementation for the diagram type it encounters. A versioned cache reuses those files across Markdown rebuilds. If rendering fails, the escaped diagram source remains readable.
+Mermaid ships locally and runs with strict security settings. Inkpath writes a small hashed ESM entry and split, hashed chunks. The browser loads Mermaid only on diagram pages, then loads the implementation for the diagram type it encounters. A content-addressed cache reuses those exact files across Markdown rebuilds. If rendering fails, the escaped diagram source remains readable.
+
+When a site contains Mermaid, Inkpath writes `_inkpath/THIRD_PARTY_NOTICES.txt` from the exact dependency installations that contributed code to that site's esbuild bundle. The notice and emitted bytes share the same cache identity, so a different resolved dependency graph cannot reuse a stale bundle or notice.
 
 Enable build-time KaTeX in `inkpath.yaml`:
 
@@ -129,7 +132,7 @@ markdown:
   math: true
 ```
 
-Then use `$x + y$` for inline math or `$$` fences for display math. Inkpath writes the HTML during the build and copies KaTeX CSS and fonts only when math is present.
+Then use `$x + y$` for inline math or `$$` fences for display math. Inkpath writes the HTML during the build and copies KaTeX CSS, fonts, and the resolved KaTeX package's `LICENSE` text only when math is present. The license is written beside those assets as `_inkpath/katex/LICENSE.txt`.
 
 ## Links and discovery files
 
@@ -160,12 +163,19 @@ markdown:
   math: true
 
 theme:
-  accent: "#0f766e"
+  accent: "#2dd4bf"
   interactive: "#0f766e"
+  interactiveHover: "#0b5f59"
+  showListDetails: false
+  showPageDetails: false
   subtle: "#f0fdfa"
 ```
 
-Paths must stay inside the project. `site.logo` and `site.image` point to regular files under `public/`. `site.url` is the public origin; use `basePath` for a site mounted below `/`. `site.author` is used by the Atom feed.
+Set both values to control them independently. For example, `showPageDetails: true` with `showListDetails: false` keeps dates and tags beneath each page heading while hiding declared duration metadata in its collection list.
+
+`interactive` and `interactiveHover` set readable link text for its resting and hover states. When only `interactive` is customized, its value is also used on hover. `accent` is reserved for selection, hover underlines, and small decorative marks, while `subtle` colors quiet surfaces such as callouts and inline code. Keep `accent` out of normal text unless its contrast is sufficient.
+
+Unknown configuration keys fail validation. Paths must stay inside the project. `site.logo` and `site.image` point to regular files under `public/`. `site.url` is the public origin; use `basePath` for a site mounted below `/`. A base path must start with `/`, must already be normalized, and cannot contain a trailing slash, query, fragment, dot segment, or encoded path separator. `site.author` is used by the Atom feed.
 
 To own the full stylesheet, put a CSS file under `public/` and set its path:
 
@@ -174,7 +184,7 @@ theme:
   stylesheet: styles/notes.css
 ```
 
-Inkpath links this file instead of generating `_inkpath/theme.css`. A custom stylesheet cannot be combined with the three theme color settings.
+Inkpath links this file instead of generating `_inkpath/theme.css`. A custom stylesheet cannot be combined with theme color settings.
 
 ## Development
 

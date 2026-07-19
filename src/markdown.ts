@@ -1,10 +1,17 @@
+import { createRequire } from "node:module";
 import path from "node:path";
 import hljs from "highlight.js";
-import katex from "katex";
 import MarkdownIt from "markdown-it";
 import footnote from "markdown-it-footnote";
 import type { Page, Site } from "./types.js";
 import { escapeHtml, isExternalUrl, siteUrl, slugify, toPosix } from "./utils.js";
+
+const require = createRequire(import.meta.url);
+let katexModule: typeof import("katex") | undefined;
+
+function loadKatex(): typeof import("katex") {
+  return (katexModule ??= require("katex") as typeof import("katex"));
+}
 
 type RenderEnvironment = {
   annotationCount: number;
@@ -174,7 +181,7 @@ function installMath(markdown: MarkdownIt, environment: RenderEnvironment): void
   const renderMath = (source: string, displayMode: boolean): string => {
     try {
       environment.mathCount += 1;
-      return katex.renderToString(source, {
+      return loadKatex().renderToString(source, {
         displayMode,
         output: "htmlAndMathml",
         strict: "error",

@@ -11,6 +11,11 @@ type DevOptions = {
   port: number;
 };
 
+type WatchPathUpdater = {
+  add(paths: string | string[]): unknown;
+  unwatch(paths: string | string[]): unknown;
+};
+
 const mimeTypes = new Map([
   [".css", "text/css; charset=utf-8"],
   [".gif", "image/gif"],
@@ -84,6 +89,22 @@ export async function safeExistingFilePath(
 
 function reloadScript(endpoint: string): string {
   return `<script>new EventSource(${JSON.stringify(endpoint)}).addEventListener("reload",function(){location.reload()})</script>`;
+}
+
+export function updateWatchedDirectories(
+  watcher: WatchPathUpdater,
+  currentDirectories: readonly string[],
+  nextDirectories: readonly string[],
+): string[] {
+  const current = new Set(currentDirectories);
+  const nextSet = new Set(nextDirectories);
+  const next = [...nextSet];
+  const added = next.filter((directory) => !current.has(directory));
+  const removed = [...current].filter((directory) => !nextSet.has(directory));
+
+  if (added.length) watcher.add(added);
+  if (removed.length) watcher.unwatch(removed);
+  return next;
 }
 
 export async function startDevServer(projectDirectory: string, options: DevOptions): Promise<void> {
@@ -184,19 +205,21 @@ export async function startDevServer(projectDirectory: string, options: DevOptio
   );
 
   let timer: NodeJS.Timeout | undefined;
+  let watchedDirectories = [result.site.config.contentDir, result.site.config.publicDir];
   const watcher = watch(
-    [
-      result.site.config.contentDir,
-      result.site.config.publicDir,
-      path.join(result.site.config.projectRoot, "inkpath.yaml"),
-    ],
+    [...watchedDirectories, path.join(result.site.config.projectRoot, "inkpath.yaml")],
     { followSymlinks: false, ignoreInitial: true },
   );
   watcher.on("all", () => {
     if (timer) clearTimeout(timer);
     timer = setTimeout(async () => {
       try {
-        result = await buildSite(projectDirectory);
+        const nextResult = await buildSite(projectDirectory);
+        watchedDirectories = updateWatchedDirectories(watcher, watchedDirectories, [
+          nextResult.site.config.contentDir,
+          nextResult.site.config.publicDir,
+        ]);
+        result = nextResult;
         for (const client of clients) client.write("event: reload\ndata: reload\n\n");
         console.log(`Rebuilt ${result.pages} pages in ${Math.round(result.elapsedMs)}ms`);
       } catch (error) {

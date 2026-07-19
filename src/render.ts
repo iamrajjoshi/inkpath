@@ -55,28 +55,33 @@ function renderBreadcrumb(site: Site, page: Page): string {
 
 function renderMetadata(site: Site, page: Page): string {
   const values: string[] = [];
-  const identifier =
-    typeof page.attributes.identifier === "string" ? page.attributes.identifier : undefined;
-  if (identifier) values.push(escapeHtml(identifier));
+  if (site.config.theme.showPageDetails) {
+    const identifier =
+      typeof page.attributes.identifier === "string" ? page.attributes.identifier : undefined;
+    if (identifier) values.push(escapeHtml(identifier));
+  }
   const breadcrumb = renderBreadcrumb(site, page);
   if (breadcrumb) values.push(breadcrumb);
 
-  const updated = formatDate(page.attributes.updated);
-  const published = formatDate(page.attributes.date);
-  if (updated) values.push(escapeHtml(`Updated ${updated}`));
-  else if (published) values.push(escapeHtml(published));
-  if (typeof page.attributes.duration === "string") {
-    values.push(escapeHtml(page.attributes.duration));
-  }
-  if (typeof page.attributes.difficulty === "string") {
-    values.push(escapeHtml(page.attributes.difficulty));
+  if (site.config.theme.showPageDetails) {
+    const updated = formatDate(page.attributes.updated);
+    const published = formatDate(page.attributes.date);
+    if (updated) values.push(escapeHtml(`Updated ${updated}`));
+    else if (published) values.push(escapeHtml(published));
+    if (typeof page.attributes.duration === "string") {
+      values.push(escapeHtml(page.attributes.duration));
+    }
+    if (typeof page.attributes.difficulty === "string") {
+      values.push(escapeHtml(page.attributes.difficulty));
+    }
   }
 
   if (!values.length) return "";
   return `<ul class="page-meta" aria-label="Page details">${values.map((value) => `<li>${value}</li>`).join("")}</ul>`;
 }
 
-function renderTags(page: Page): string {
+function renderTags(site: Site, page: Page): string {
+  if (!site.config.theme.showPageDetails) return "";
   const tags = page.attributes.tags;
   if (!tags?.length) return "";
   return `<ul class="page-tags" aria-label="Tags">${tags.map((tag) => `<li>${escapeHtml(tag)}</li>`).join("")}</ul>`;
@@ -86,7 +91,7 @@ function renderHeader(site: Site, page: Page): string {
   return `<header class="page-header">
     <h1>${escapeHtml(page.title)}</h1>
     ${renderMetadata(site, page)}
-    ${renderTags(page)}
+    ${renderTags(site, page)}
     <p class="lede">${escapeHtml(page.summary)}</p>
   </header>`;
 }
@@ -105,7 +110,8 @@ function renderToc(page: Page): string {
   </nav>`;
 }
 
-function contentItemMeta(page: Page): string {
+function contentItemMeta(site: Site, page: Page): string {
+  if (!site.config.theme.showListDetails) return "";
   const values: string[] = [];
   if (typeof page.attributes.identifier === "string") values.push(page.attributes.identifier);
   if (typeof page.attributes.duration === "string") values.push(page.attributes.duration);
@@ -120,7 +126,7 @@ function renderBacklinks(site: Site, page: Page): string {
   const links = page.backlinks
     .map(
       (source) =>
-        `<li><a href="${escapeHtml(pageUrl(site, source))}">${escapeHtml(source.title)}</a><span>${escapeHtml(source.summary)}</span></li>`,
+        `<li><a href="${escapeHtml(pageUrl(site, source))}">${escapeHtml(source.title)}</a></li>`,
     )
     .join("");
   return `<section class="backlinks" aria-labelledby="backlinks-title">
@@ -139,7 +145,7 @@ function renderContentList(site: Site, page: Page): string {
     .map(
       (child) => `<li>
         <a href="${escapeHtml(pageUrl(site, child))}">
-          <span class="content-list__title"><span class="content-list__title-text">${escapeHtml(child.title)}</span>${contentItemMeta(child)}</span>
+          <span class="content-list__title"><span class="content-list__title-text">${escapeHtml(child.title)}</span>${contentItemMeta(site, child)}</span>
           <span class="content-list__summary">${escapeHtml(child.summary)}</span>
         </a>
       </li>`,
