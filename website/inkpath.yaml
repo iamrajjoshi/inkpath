@@ -3,11 +3,16 @@ output: site
 public: public
 
 site:
+  author: Raj Joshi
   title: Inkpath
   description: Static notes and documentation sites from Markdown.
   lang: en
   url: https://inkpath.dev
   logo: favicon.svg
+  image: social-card.svg
+
+markdown:
+  math: true
 
 theme:
   accent: "#0f766e"

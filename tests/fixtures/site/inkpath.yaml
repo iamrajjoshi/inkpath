@@ -2,5 +2,11 @@ content: content
 output: site
 public: public
 site:
+  author: Fixture Author
   basePath: /docs
+  image: favicon.svg
   logo: favicon.svg
+  url: https://example.com
+
+markdown:
+  math: true

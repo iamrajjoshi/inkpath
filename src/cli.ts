@@ -28,6 +28,10 @@ type Arguments = {
   project: string;
 };
 
+function countLabel(count: number, singular: string): string {
+  return `${count} ${singular}${count === 1 ? "" : "s"}`;
+}
+
 function readValue(args: string[], index: number, flag: string): string {
   const value = args[index + 1];
   if (!value || value.startsWith("--")) throw new Error(`${flag} needs a value`);
@@ -93,7 +97,9 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
 
   const result = await buildSite(parsed.project, { write: parsed.command === "build" });
   if (parsed.command === "check") {
-    console.log(`Checked ${result.pages} pages (${result.diagrams} diagrams)`);
+    console.log(
+      `Checked ${countLabel(result.pages, "page")} (${countLabel(result.diagrams, "diagram")}, ${countLabel(result.math, "math expression")}, ${countLabel(result.orphans, "orphan note")})`,
+    );
   } else {
     console.log(`Built ${result.pages} pages in ${Math.round(result.elapsedMs)}ms`);
   }

@@ -2,6 +2,12 @@ import type { Page, Site } from "./types.js";
 import { escapeHtml, formatDate, siteUrl } from "./utils.js";
 import { INKPATH_VERSION } from "./version.js";
 
+export type DocumentAssets = {
+  diagrams: number;
+  math: number;
+  mermaidEntry?: string;
+};
+
 function pageUrl(site: Site, page: Page): string {
   return siteUrl(site.config.site.basePath, page.route);
 }
@@ -59,15 +65,28 @@ function renderMetadata(site: Site, page: Page): string {
   const published = formatDate(page.attributes.date);
   if (updated) values.push(escapeHtml(`Updated ${updated}`));
   else if (published) values.push(escapeHtml(published));
+  if (typeof page.attributes.duration === "string") {
+    values.push(escapeHtml(page.attributes.duration));
+  }
+  if (typeof page.attributes.difficulty === "string") {
+    values.push(escapeHtml(page.attributes.difficulty));
+  }
 
   if (!values.length) return "";
   return `<ul class="page-meta" aria-label="Page details">${values.map((value) => `<li>${value}</li>`).join("")}</ul>`;
+}
+
+function renderTags(page: Page): string {
+  const tags = page.attributes.tags;
+  if (!tags?.length) return "";
+  return `<ul class="page-tags" aria-label="Tags">${tags.map((tag) => `<li>${escapeHtml(tag)}</li>`).join("")}</ul>`;
 }
 
 function renderHeader(site: Site, page: Page): string {
   return `<header class="page-header">
     <h1>${escapeHtml(page.title)}</h1>
     ${renderMetadata(site, page)}
+    ${renderTags(page)}
     <p class="lede">${escapeHtml(page.summary)}</p>
   </header>`;
 }
@@ -89,9 +108,25 @@ function renderToc(page: Page): string {
 function contentItemMeta(page: Page): string {
   const values: string[] = [];
   if (typeof page.attributes.identifier === "string") values.push(page.attributes.identifier);
+  if (typeof page.attributes.duration === "string") values.push(page.attributes.duration);
+  if (typeof page.attributes.difficulty === "string") values.push(page.attributes.difficulty);
   return values.length
     ? `<span class="content-list__meta">${escapeHtml(values.join(" · "))}</span>`
     : "";
+}
+
+function renderBacklinks(site: Site, page: Page): string {
+  if (!page.backlinks.length) return "";
+  const links = page.backlinks
+    .map(
+      (source) =>
+        `<li><a href="${escapeHtml(pageUrl(site, source))}">${escapeHtml(source.title)}</a><span>${escapeHtml(source.summary)}</span></li>`,
+    )
+    .join("");
+  return `<section class="backlinks" aria-labelledby="backlinks-title">
+    <h2 id="backlinks-title">Backlinks</h2>
+    <ul>${links}</ul>
+  </section>`;
 }
 
 function renderContentList(site: Site, page: Page): string {
@@ -143,16 +178,67 @@ function absoluteCanonical(site: Site, page: Page): string | undefined {
   return new URL(pageUrl(site, page), base.endsWith("/") ? base : `${base}/`).href;
 }
 
-export function renderDocument(site: Site, page: Page, diagrams: number): string {
+function absolutePublicAsset(site: Site, asset: string): string | undefined {
+  const base = site.config.site.url;
+  if (!base) return undefined;
+  return new URL(publicAssetUrl(site, asset), `${base}/`).href;
+}
+
+function hasFeeds(site: Site): boolean {
+  return site.pages.some(
+    (page) =>
+      formatDate(page.attributes.updated) !== undefined ||
+      formatDate(page.attributes.date) !== undefined,
+  );
+}
+
+function renderSocialMetadata(site: Site, page: Page, title: string, canonical?: string): string {
+  if (!canonical) return "";
+  const imageAsset = site.config.site.image ?? site.config.site.logo;
+  const image = imageAsset ? absolutePublicAsset(site, imageAsset) : undefined;
+  const siteTitle = site.config.site.title ?? site.home.title;
+  const tags = page.attributes.tags ?? [];
+  return [
+    `<meta property="og:title" content="${escapeHtml(title)}">`,
+    `<meta property="og:description" content="${escapeHtml(page.summary)}">`,
+    `<meta property="og:type" content="${page.kind === "page" ? "article" : "website"}">`,
+    `<meta property="og:url" content="${escapeHtml(canonical)}">`,
+    `<meta property="og:site_name" content="${escapeHtml(siteTitle)}">`,
+    ...(image
+      ? [
+          `<meta property="og:image" content="${escapeHtml(image)}">`,
+          `<meta property="og:image:alt" content="${escapeHtml(siteTitle)}">`,
+          `<meta name="twitter:card" content="summary_large_image">`,
+        ]
+      : []),
+    ...(page.kind === "page" && page.attributes.date
+      ? [
+          `<meta property="article:published_time" content="${escapeHtml(new Date(page.attributes.date).toISOString())}">`,
+        ]
+      : []),
+    ...(page.kind === "page" && page.attributes.updated
+      ? [
+          `<meta property="article:modified_time" content="${escapeHtml(new Date(page.attributes.updated).toISOString())}">`,
+        ]
+      : []),
+    ...(page.kind === "page"
+      ? tags.map((tag) => `<meta property="article:tag" content="${escapeHtml(tag)}">`)
+      : []),
+  ].join("\n  ");
+}
+
+export function renderDocument(site: Site, page: Page, assets: DocumentAssets): string {
   const siteTitle = site.config.site.title ?? site.home.title;
   const description = page.summary;
   const title = page.kind === "home" ? siteTitle : `${page.title} · ${siteTitle}`;
   const canonical = absoluteCanonical(site, page);
   const bodyContent = `<article class="prose">${page.rendered}</article>`;
   const listing = renderContentList(site, page);
-  const script = diagrams
-    ? `<script type="module" src="${escapeHtml(`${site.config.site.basePath}/_inkpath/inkpath.js`)}"></script>`
-    : "";
+  const script =
+    assets.diagrams && assets.mermaidEntry
+      ? `<script type="module" src="${escapeHtml(`${site.config.site.basePath}/_inkpath/${assets.mermaidEntry}`)}"></script>`
+      : "";
+  const feeds = hasFeeds(site);
 
   return `<!doctype html>
 <html lang="${escapeHtml(site.config.site.lang)}">
@@ -163,8 +249,12 @@ export function renderDocument(site: Site, page: Page, diagrams: number): string
   <meta name="description" content="${escapeHtml(description)}">
   <meta name="generator" content="Inkpath ${escapeHtml(INKPATH_VERSION)}">
   ${canonical ? `<link rel="canonical" href="${escapeHtml(canonical)}">` : ""}
+  ${renderSocialMetadata(site, page, title, canonical)}
+  ${feeds ? `<link rel="alternate" type="application/rss+xml" title="${escapeHtml(siteTitle)} RSS" href="${escapeHtml(`${site.config.site.basePath}/rss.xml`)}">` : ""}
+  ${feeds ? `<link rel="alternate" type="application/atom+xml" title="${escapeHtml(siteTitle)} Atom" href="${escapeHtml(`${site.config.site.basePath}/atom.xml`)}">` : ""}
   <link rel="icon" href="${escapeHtml(`${site.config.site.basePath}/favicon.svg`)}" type="image/svg+xml">
   <link rel="stylesheet" href="${escapeHtml(stylesheetUrl(site))}">
+  ${assets.math ? `<link rel="stylesheet" href="${escapeHtml(`${site.config.site.basePath}/_inkpath/katex/katex.min.css`)}">` : ""}
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to content</a>
@@ -181,6 +271,7 @@ export function renderDocument(site: Site, page: Page, diagrams: number): string
     ${renderToc(page)}
     ${bodyContent}
     ${listing}
+    ${renderBacklinks(site, page)}
     ${renderFooter(site, page)}
   </main>
   ${script}

@@ -165,6 +165,23 @@ a:hover {
   content: "·";
 }
 
+.page-tags {
+  display: flex;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  list-style: none;
+}
+
+.page-tags li {
+  padding: 0.08rem 0.42rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
 .breadcrumbs ol {
   display: flex;
   margin: 0;
@@ -259,6 +276,20 @@ a:hover {
   text-wrap: balance;
 }
 
+.heading-permalink {
+  margin-left: 0.4rem;
+  color: var(--interactive);
+  font-size: 0.72em;
+  font-weight: 500;
+  opacity: 0;
+  text-decoration: none;
+}
+
+.prose :is(h2, h3, h4, h5, h6):hover .heading-permalink,
+.heading-permalink:focus-visible {
+  opacity: 1;
+}
+
 .prose h2 {
   margin: 2.6rem 0 0.75rem;
   font-size: 1.25rem;
@@ -311,6 +342,21 @@ a:hover {
   font-weight: 750;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+details.annotation > summary.annotation__label {
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+details.annotation[open] > summary.annotation__label {
+  margin-bottom: 0.55rem;
+}
+
+.math-display {
+  margin: 1.25rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .prose :not(pre) > code {
@@ -512,6 +558,37 @@ a:hover {
   font-weight: 500;
 }
 
+.backlinks {
+  margin-top: 3rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--line);
+}
+
+.backlinks h2 {
+  margin: 0 0 0.65rem;
+  font-size: 1rem;
+}
+
+.backlinks ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.backlinks li + li {
+  margin-top: 0.6rem;
+}
+
+.backlinks a {
+  font-weight: 650;
+}
+
+.backlinks span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 .page-footer {
   margin-top: 3rem;
   padding-top: 0.8rem;
@@ -575,6 +652,12 @@ a:hover {
   }
 }
 
+@media (hover: none) {
+  .heading-permalink {
+    opacity: 1;
+  }
+}
+
 @media print {
   .site-header,
   .skip-link,
@@ -596,7 +679,7 @@ a:hover {
 }
 
 export const mermaidClientSource = String.raw`
-import mermaid from "mermaid";
+const { default: mermaid } = await import("mermaid");
 
 mermaid.initialize({
   startOnLoad: false,

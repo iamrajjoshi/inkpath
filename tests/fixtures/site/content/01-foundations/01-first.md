@@ -2,6 +2,12 @@
 title: First note
 order: 1
 identifier: F1
+date: 2026-01-02
+duration: 8 minutes
+difficulty: Beginner
+tags:
+  - reliability
+  - storage
 ---
 
 This first sentence becomes the automatic summary. A second sentence should not be required.
@@ -24,6 +30,12 @@ A repeated reference returns to the same explanation.[^commit]
 > [!WARNING]
 > Keep retry ownership at one layer.
 
+> [!TIP] Trace the boundary
+> Follow one write from the request to durable storage.
+
+> [!IMPORTANT]- Optional detail
+> This starts collapsed.
+
 > [!note]
 > Lowercase markers remain ordinary blockquotes.
 
@@ -32,6 +44,12 @@ const unsafe = "<script>&";
 ```
 
 <script>alert("raw HTML must not run")</script>
+
+Inline math is rendered at build time: $c = a + b$.
+
+$$
+L = \sum_{i=1}^{n} x_i
+$$
 
 ```mermaid
 flowchart LR

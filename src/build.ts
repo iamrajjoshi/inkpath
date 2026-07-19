@@ -11,13 +11,19 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { build as esbuild } from "esbuild";
+import { copyKatexAssets, copyMermaidAssets } from "./assets.js";
 import { loadConfig } from "./config.js";
 import { loadSite } from "./content.js";
+import {
+  orphanPages,
+  renderAtom,
+  renderOrphanReport,
+  renderRss,
+  renderSitemap,
+} from "./discovery.js";
 import { renderMarkdown } from "./markdown.js";
 import { renderDocument, renderNotFound } from "./render.js";
-import { mermaidClientSource, renderThemeCss } from "./theme.js";
+import { renderThemeCss } from "./theme.js";
 import type { BuildResult, Page, InkpathConfig, Site } from "./types.js";
 import { isPathWithin, pathsOverlap } from "./utils.js";
 
@@ -115,30 +121,12 @@ function outputPath(outputRoot: string, route: string): string {
   return path.join(outputRoot, route.replace(/^\//, ""), "index.html");
 }
 
-async function bundleMermaid(outputRoot: string): Promise<void> {
-  const moduleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-  await esbuild({
-    absWorkingDir: moduleRoot,
-    bundle: true,
-    format: "esm",
-    minify: true,
-    outfile: path.join(outputRoot, "_inkpath", "inkpath.js"),
-    platform: "browser",
-    stdin: {
-      contents: mermaidClientSource,
-      loader: "js",
-      resolveDir: moduleRoot,
-      sourcefile: "inkpath-mermaid-client.js",
-    },
-    target: ["es2022"],
-  });
-}
-
 async function writeOutput(
   site: Site,
   config: InkpathConfig,
   renders: Map<Page, PageRender>,
   diagrams: number,
+  math: number,
 ): Promise<void> {
   const outputParent = path.dirname(config.outputDir);
   const outputName = path.basename(config.outputDir);
@@ -174,19 +162,37 @@ async function writeOutput(
     await mkdir(contentAssets, { recursive: true });
     await copyDirectory(config.contentDir, contentAssets, true);
 
+    let mermaidEntry: string | undefined;
+    if (diagrams) {
+      mermaidEntry = await copyMermaidAssets(path.join(stage, "_inkpath"));
+    }
+    if (math) await copyKatexAssets(path.join(stage, "_inkpath", "katex"));
+
     for (const [page, render] of renders) {
       const destination = outputPath(stage, page.route);
       await mkdir(path.dirname(destination), { recursive: true });
-      await writeFile(destination, renderDocument(site, page, render.diagrams), "utf8");
+      await writeFile(
+        destination,
+        renderDocument(site, page, {
+          diagrams: render.diagrams,
+          math: render.math,
+          ...(mermaidEntry ? { mermaidEntry } : {}),
+        }),
+        "utf8",
+      );
     }
 
     const firstPage = renders.keys().next().value as Page | undefined;
     if (!firstPage) throw new Error("cannot render an empty site");
     await writeFile(path.join(stage, "404.html"), renderNotFound(site), "utf8");
-    if (diagrams) {
-      await mkdir(path.join(stage, "_inkpath"), { recursive: true });
-      await bundleMermaid(stage);
-    }
+    await mkdir(path.join(stage, "_inkpath"), { recursive: true });
+    await writeFile(path.join(stage, "_inkpath", "orphans.json"), renderOrphanReport(site), "utf8");
+    const sitemap = renderSitemap(site);
+    const rss = renderRss(site);
+    const atom = renderAtom(site);
+    if (sitemap) await writeFile(path.join(stage, "sitemap.xml"), sitemap, "utf8");
+    if (rss) await writeFile(path.join(stage, "rss.xml"), rss, "utf8");
+    if (atom) await writeFile(path.join(stage, "atom.xml"), atom, "utf8");
 
     let movedPrevious = false;
     if (await exists(config.outputDir)) {
@@ -217,20 +223,39 @@ export async function buildSite(
   const site = await loadSite(config);
   const renders = new Map<Page, PageRender>();
   let diagrams = 0;
+  let math = 0;
 
   for (const page of site.pages) {
     const render = renderMarkdown(page, site);
     page.rendered = render.html;
     renders.set(page, render);
     diagrams += render.diagrams;
+    math += render.math;
   }
   validateAnchors(renders);
   await validateAssets(config, renders);
-  if (options.write !== false) await writeOutput(site, config, renders, diagrams);
+  for (const page of site.pages) page.backlinks = [];
+  for (const [source, render] of renders) {
+    for (const reference of render.internalReferences) {
+      if (reference.target !== source && !reference.target.backlinks.includes(source)) {
+        reference.target.backlinks.push(source);
+      }
+    }
+  }
+  const navigationOrder = new Map(site.pages.map((page, index) => [page, index]));
+  for (const page of site.pages) {
+    page.backlinks.sort(
+      (left, right) => (navigationOrder.get(left) ?? 0) - (navigationOrder.get(right) ?? 0),
+    );
+  }
+  const orphans = orphanPages(site).length;
+  if (options.write !== false) await writeOutput(site, config, renders, diagrams, math);
 
   return {
     diagrams,
     elapsedMs: performance.now() - started,
+    math,
+    orphans,
     pages: site.pages.length,
     site,
   };

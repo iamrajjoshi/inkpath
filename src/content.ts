@@ -66,6 +66,21 @@ function parseFrontmatter(
       throw new Error(`${relativePath}: ${key} must be a non-empty string`);
     }
   }
+  for (const key of ["duration", "difficulty"] as const) {
+    const value = attributes[key];
+    if (value !== undefined && (typeof value !== "string" || !value.trim())) {
+      throw new Error(`${relativePath}: ${key} must be a non-empty string`);
+    }
+  }
+  for (const key of ["date", "updated"] as const) {
+    const value = attributes[key];
+    if (value !== undefined && !(typeof value === "string" || value instanceof Date)) {
+      throw new Error(`${relativePath}: ${key} must be a date`);
+    }
+    if (value !== undefined && Number.isNaN(new Date(value).valueOf())) {
+      throw new Error(`${relativePath}: ${key} must be a valid date`);
+    }
+  }
   if (
     attributes.order !== undefined &&
     (!Number.isInteger(attributes.order) || attributes.order < 0)
@@ -74,7 +89,8 @@ function parseFrontmatter(
   }
   if (
     attributes.tags !== undefined &&
-    (!Array.isArray(attributes.tags) || attributes.tags.some((tag) => typeof tag !== "string"))
+    (!Array.isArray(attributes.tags) ||
+      attributes.tags.some((tag) => typeof tag !== "string" || !tag.trim()))
   ) {
     throw new Error(`${relativePath}: tags must be a list of strings`);
   }
@@ -359,6 +375,7 @@ export async function loadSite(config: InkpathConfig): Promise<Site> {
       orderFromName(document.isIndex ? (document.directory.split("/").at(-1) ?? "") : stem);
     const page: Page = {
       attributes: document.attributes,
+      backlinks: [],
       body,
       children: [],
       depth: route.split("/").filter(Boolean).length,

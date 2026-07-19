@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">Inkpath</title>
+  <desc id="description">Static notes and documentation sites from Markdown.</desc>
+  <rect width="1200" height="630" fill="#ffffff"/>
+  <rect x="96" y="112" width="16" height="406" rx="8" fill="#0f766e"/>
+  <text x="164" y="290" fill="#171717" font-family="system-ui, sans-serif" font-size="112" font-weight="700">Inkpath</text>
+  <text x="170" y="380" fill="#4f4f4f" font-family="system-ui, sans-serif" font-size="42">Static sites from Markdown</text>
+</svg>

@@ -79,13 +79,13 @@ slug: storage-engines
 ---
 ```
 
-`title`, `description`, `summary`, `order`, `identifier`, `slug`, `date`, `updated`, `duration`, `difficulty`, `tags`, and `draft` are supported. A numeric filename or `order` controls navigation; `identifier` is display text only.
+`title`, `description`, `summary`, `order`, `identifier`, `slug`, `date`, `updated`, `duration`, `difficulty`, `tags`, and `draft` are supported. A numeric filename or `order` controls navigation; `identifier` is display text only. Inkpath renders the identifier, dates, duration, difficulty, and tags on the page.
 
 Relative links use source filenames. Inkpath rewrites them to generated routes and rejects missing pages, headings, images, or files.
 
 ## Markdown
 
-Inkpath renders headings, tables, nested lists, language-colored code blocks, footnotes, annotations, and Mermaid diagrams. Raw HTML and MDX aren't executed.
+Inkpath renders headings with permalink anchors, tables, nested lists, language-colored code blocks, footnotes, callouts, Mermaid diagrams, and optional KaTeX. Raw HTML and MDX aren't executed.
 
 Footnotes can be named or inline:
 
@@ -97,13 +97,13 @@ A successful response isn't proof of durable storage.[^durability]
 Retries need an operation identity.^[One action can span several requests.]
 ```
 
-Annotations use GitHub-style markers:
+Callouts use GitHub-style markers. Text after the marker sets a custom title. Add `-` for a collapsed callout or `+` for one that starts open:
 
 ```md
-> [!NOTE]
+> [!NOTE] Replication boundary
 > Replication improves availability, not correctness by itself.
 
-> [!WARNING]
+> [!WARNING]- Retry detail
 > Retrying a non-idempotent write can duplicate it.
 ```
 
@@ -120,7 +120,22 @@ flowchart LR
 ```
 ````
 
-Mermaid ships locally and runs with strict security settings. If rendering fails, the escaped diagram source remains readable.
+Mermaid ships locally and runs with strict security settings. Inkpath writes a small hashed ESM entry and split, hashed chunks. The browser loads Mermaid only on diagram pages, then loads the implementation for the diagram type it encounters. A versioned cache reuses those files across Markdown rebuilds. If rendering fails, the escaped diagram source remains readable.
+
+Enable build-time KaTeX in `inkpath.yaml`:
+
+```yaml
+markdown:
+  math: true
+```
+
+Then use `$x + y$` for inline math or `$$` fences for display math. Inkpath writes the HTML during the build and copies KaTeX CSS and fonts only when math is present.
+
+## Links and discovery files
+
+Inkpath derives backlinks from relative Markdown links and lists them on each destination page. Every build also writes `_inkpath/orphans.json`, which reports notes with no incoming Markdown links.
+
+When `site.url` is set, Inkpath writes canonical URLs, Open Graph tags, and `sitemap.xml`. Dated pages are also included in `rss.xml` and `atom.xml`. Set `site.image` to a public image for `og:image`; `site.logo` is the fallback.
 
 ## Configuration
 
@@ -132,12 +147,17 @@ output: site
 public: public
 
 site:
+  author: Raj Joshi
   title: My notes
   description: Notes about systems I want to remember.
   lang: en
   basePath: /notes
   url: https://example.com
   logo: favicon.svg
+  image: social-card.svg
+
+markdown:
+  math: true
 
 theme:
   accent: "#0f766e"
@@ -145,7 +165,7 @@ theme:
   subtle: "#f0fdfa"
 ```
 
-Paths must stay inside the project. `site.logo` points to a regular file under `public/`. `basePath` prefixes generated links and assets.
+Paths must stay inside the project. `site.logo` and `site.image` point to regular files under `public/`. `site.url` is the public origin; use `basePath` for a site mounted below `/`. `site.author` is used by the Atom feed.
 
 To own the full stylesheet, put a CSS file under `public/` and set its path:
 

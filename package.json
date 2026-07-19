@@ -1,6 +1,6 @@
 {
   "name": "inkpath",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Build static notes and documentation sites from Markdown.",
   "keywords": [
     "documentation",
@@ -59,12 +59,14 @@
     "chokidar": "5.0.0",
     "esbuild": "0.28.1",
     "highlight.js": "11.11.1",
+    "katex": "0.18.0",
     "markdown-it": "14.3.0",
     "markdown-it-footnote": "4.0.0",
     "mermaid": "11.16.0",
     "yaml": "2.9.0"
   },
   "devDependencies": {
+    "@types/katex": "0.16.8",
     "@types/markdown-it": "14.1.2",
     "@types/markdown-it-footnote": "3.0.4",
     "@types/node": "22.20.1",

@@ -9,6 +9,7 @@ export type {
   Page,
   PageKind,
   InkpathConfig,
+  MarkdownSettings,
   Site,
   SiteSettings,
   ThemeSettings,
