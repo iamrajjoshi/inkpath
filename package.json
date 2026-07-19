@@ -8,7 +8,7 @@
     "notes",
     "static-site-generator"
   ],
-  "homepage": "https://github.com/iamrajjoshi/inkpath#readme",
+  "homepage": "https://inkpath.dev",
   "bugs": {
     "url": "https://github.com/iamrajjoshi/inkpath/issues"
   },
@@ -50,7 +50,10 @@
     "prepublishOnly": "pnpm verify",
     "test": "pnpm build && node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm check && pnpm example:build"
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm check && pnpm example:build && pnpm website:check",
+    "website:build": "tsx src/cli.ts build website",
+    "website:check": "tsx src/cli.ts check website",
+    "website:dev": "tsx src/cli.ts dev website"
   },
   "dependencies": {
     "chokidar": "5.0.0",

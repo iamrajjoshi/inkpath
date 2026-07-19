@@ -2,6 +2,8 @@
 
 Inkpath builds static notes and documentation sites from Markdown. It writes plain HTML and CSS and serves a live preview while you edit. Built pages use browser JavaScript only when they contain a Mermaid diagram.
 
+The project website is built with Inkpath and lives at [inkpath.dev](https://inkpath.dev).
+
 ## Install
 
 Inkpath requires Node.js 22.13 or newer.

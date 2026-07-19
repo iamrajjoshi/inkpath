@@ -1,0 +1,15 @@
+content: content
+output: site
+public: public
+
+site:
+  title: Inkpath
+  description: Static notes and documentation sites from Markdown.
+  lang: en
+  url: https://inkpath.dev
+  logo: favicon.svg
+
+theme:
+  accent: "#0f766e"
+  interactive: "#0f766e"
+  subtle: "#f0fdfa"
