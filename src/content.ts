@@ -60,7 +60,7 @@ function parseFrontmatter(
   }
 
   const attributes = (parsed ?? {}) as Frontmatter;
-  for (const key of ["title", "description", "summary", "slug"] as const) {
+  for (const key of ["title", "description", "summary", "slug", "identifier"] as const) {
     const value = attributes[key];
     if (value !== undefined && (typeof value !== "string" || !value.trim())) {
       throw new Error(`${relativePath}: ${key} must be a non-empty string`);

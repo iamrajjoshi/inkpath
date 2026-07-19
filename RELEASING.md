@@ -1,16 +1,43 @@
 # Releasing Inkpath
 
-Inkpath publishes `@iamrajjoshi/inkpath` when a matching `v*` tag reaches GitHub.
+Inkpath publishes `inkpath` when a matching `v*` tag reaches GitHub.
 
-## One-time setup
+## One-time bootstrap
 
-Create a granular npm token with read and write access to `@iamrajjoshi/inkpath`. Enable **Bypass 2FA** so the GitHub workflow can publish without an interactive prompt. Add the token to the repository without pasting it into a shell command:
+npm requires a package to exist before it can use trusted publishing. Publish `0.1.0` once from a clean checkout after verifying the package:
 
 ```bash
-gh secret set NPM_TOKEN --repo iamrajjoshi/inkpath
+pnpm verify
+pnpm package:check
+npm login
+npm publish --access public
+npm logout
 ```
 
-The command reads the token from a hidden prompt. The first npm release must use a token because the package doesn't exist in the registry yet. After that release, npm trusted publishing can replace the stored token.
+Confirm that the package exists:
+
+```bash
+npm view inkpath@0.1.0 version
+```
+
+Then configure the GitHub Actions trusted publisher in the `inkpath` package settings on npm:
+
+- Organization or user: `iamrajjoshi`
+- Repository: `inkpath`
+- Workflow filename: `release.yml`
+- Environment: leave blank
+- Allowed action: `npm publish`
+
+The equivalent command with npm 11.15 or newer is:
+
+```bash
+npm trust github inkpath \
+  --repo iamrajjoshi/inkpath \
+  --file release.yml \
+  --allow-publish
+```
+
+The release workflow uses short-lived OIDC credentials and does not need an `NPM_TOKEN` secret.
 
 ## Release a version
 
@@ -24,8 +51,10 @@ pnpm package:check
 Commit and push the version change. Create a tag with the same version and push it:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
+
+The `v0.1.0` tag already belongs to the original scoped-package release. The first tag-driven release for `inkpath` should therefore use `0.1.1` or newer.
 
 The release workflow checks the tag, installs the packed package in a temporary project, and publishes it to npm. It downloads the registry archive, records its SHA-256 checksum, and attaches both files to a GitHub release. Rerunning the workflow won't try to republish an existing version.

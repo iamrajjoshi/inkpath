@@ -1,7 +1,7 @@
 ---
 title: First note
 order: 1
-number: F1
+identifier: F1
 ---
 
 This first sentence becomes the automatic summary. A second sentence should not be required.

@@ -10,7 +10,7 @@ export type Frontmatter = Record<string, unknown> & {
   summary?: string;
   slug?: string;
   order?: number;
-  number?: string;
+  identifier?: string;
   duration?: string;
   difficulty?: string;
   tags?: string[];

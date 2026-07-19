@@ -7,7 +7,7 @@ Inkpath builds static notes and documentation sites from Markdown. It writes pla
 Inkpath requires Node.js 22.13 or newer.
 
 ```bash
-pnpm add -D @iamrajjoshi/inkpath
+pnpm add -D inkpath
 ```
 
 ## Create a site
@@ -72,12 +72,12 @@ Each page accepts frontmatter:
 title: Storage engines
 description: How logs, pages, indexes, and compaction shape a database.
 order: 3
-number: DB3
+identifier: DB3
 slug: storage-engines
 ---
 ```
 
-`title`, `description`, `summary`, `order`, `number`, `slug`, `date`, `updated`, `duration`, `difficulty`, `tags`, and `draft` are supported. A numeric filename or `order` controls navigation; `number` is display text only.
+`title`, `description`, `summary`, `order`, `identifier`, `slug`, `date`, `updated`, `duration`, `difficulty`, `tags`, and `draft` are supported. A numeric filename or `order` controls navigation; `identifier` is display text only.
 
 Relative links use source filenames. Inkpath rewrites them to generated routes and rejects missing pages, headings, images, or files.
 
@@ -153,12 +153,6 @@ theme:
 ```
 
 Inkpath links this file instead of generating `_inkpath/theme.css`. A custom stylesheet cannot be combined with the three theme color settings.
-
-## Build behavior
-
-Inkpath parses all Markdown before it replaces the output directory. A failed build leaves the last successful site in place. Generated pages contain no framework runtime, search service, analytics, or database.
-
-The development server listens on loopback by default. Passing another `--host` exposes it to that network.
 
 ## Development
 

@@ -1,5 +1,5 @@
 {
-  "name": "@iamrajjoshi/inkpath",
+  "name": "inkpath",
   "version": "0.1.0",
   "description": "Build static notes and documentation sites from Markdown.",
   "keywords": [

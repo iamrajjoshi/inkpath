@@ -2,7 +2,7 @@
 title: Second note
 description: The explicit summary wins over the body.
 order: 2
-number: F2
+identifier: F2
 ---
 
 ## Second section

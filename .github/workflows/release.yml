@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   release:
@@ -43,15 +44,13 @@ jobs:
           else
             npm publish
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Download the published archive
         run: |
           mkdir -p release
           package_name="$(node -p "require('./package.json').name")"
           package_version="$(node -p "require('./package.json').version")"
-          archive="release/iamrajjoshi-inkpath-${package_version}.tgz"
+          archive="release/inkpath-${package_version}.tgz"
           for attempt in 1 2 3 4 5 6; do
             archive_url="$(npm view "${package_name}@${package_version}" dist.tarball 2>/dev/null || true)"
             if [ -n "${archive_url}" ] && curl -fsSL "${archive_url}" -o "${archive}"; then

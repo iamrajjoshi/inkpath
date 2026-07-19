@@ -1,0 +1,18 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 64 64"
+  fill="none"
+  color="#0f766e"
+  role="img"
+  aria-labelledby="inkpath-title"
+>
+  <title id="inkpath-title">Inkpath</title>
+  <path
+    d="M10 14h34M10 26h26M10 38h14v2c0 7.732 6.268 14 14 14h16"
+    stroke="currentColor"
+    stroke-width="6"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="54" cy="54" r="3" fill="currentColor" />
+</svg>

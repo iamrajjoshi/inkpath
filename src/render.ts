@@ -49,8 +49,9 @@ function renderBreadcrumb(site: Site, page: Page): string {
 
 function renderMetadata(site: Site, page: Page): string {
   const values: string[] = [];
-  const number = typeof page.attributes.number === "string" ? page.attributes.number : undefined;
-  if (number) values.push(escapeHtml(number));
+  const identifier =
+    typeof page.attributes.identifier === "string" ? page.attributes.identifier : undefined;
+  if (identifier) values.push(escapeHtml(identifier));
   const breadcrumb = renderBreadcrumb(site, page);
   if (breadcrumb) values.push(breadcrumb);
 
@@ -87,7 +88,7 @@ function renderToc(page: Page): string {
 
 function contentItemMeta(page: Page): string {
   const values: string[] = [];
-  if (typeof page.attributes.number === "string") values.push(page.attributes.number);
+  if (typeof page.attributes.identifier === "string") values.push(page.attributes.identifier);
   return values.length
     ? `<span class="content-list__meta">${escapeHtml(values.join(" · "))}</span>`
     : "";
