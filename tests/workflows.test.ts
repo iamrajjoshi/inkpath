@@ -108,6 +108,9 @@ test("isolates release verification, npm publishing, and GitHub release permissi
   assert.ok(verify);
   assert.ok(publish);
   assert.ok(githubRelease);
+  assert.match(source, /workflow_dispatch:[\s\S]*tag:[\s\S]*required: true/);
+  assert.match(source, /RELEASE_TAG: \$\{\{ inputs\.tag \|\| github\.ref_name \}\}/);
+  assert.match(source, /ref: \$\{\{ env\.RELEASE_TAG \}\}/);
   assert.deepEqual(workflow.permissions, { contents: "read" });
   assert.deepEqual(verify.permissions, { contents: "read" });
   assert.deepEqual(publish.permissions, { "id-token": "write" });
@@ -138,6 +141,7 @@ test("isolates release verification, npm publishing, and GitHub release permissi
   assert.doesNotMatch(publishScript, /npm (?:ci|exec|install|pack|run|test)\b/);
   assert.match(publishScript, /awk '\{ print \$2 \}' release\/checksums\.txt/);
   assert.match(publishScript, /shasum -a 256 -c checksums\.txt/);
+  assert.match(publishScript, /archive="\.\/release\/inkpath-\$\{version\}\.tgz"/);
   assert.match(publishScript, /npm publish --ignore-scripts --provenance "\$\{archive\}"/);
   assert.match(publishScript, /test "\$\{actual_sha\}" = "\$\{expected_sha\}"/);
   assert.ok(
