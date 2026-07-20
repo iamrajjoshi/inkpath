@@ -95,7 +95,11 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
     return;
   }
 
-  const result = await buildSite(parsed.project, { write: parsed.command === "build" });
+  const commitSha = process.env.INKPATH_COMMIT_SHA;
+  const result = await buildSite(parsed.project, {
+    ...(commitSha ? { commitSha } : {}),
+    write: parsed.command === "build",
+  });
   if (parsed.command === "check") {
     console.log(
       `Checked ${countLabel(result.pages, "page")} (${countLabel(result.diagrams, "diagram")}, ${countLabel(result.math, "math expression")}, ${countLabel(result.orphans, "orphan note")})`,

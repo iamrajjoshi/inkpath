@@ -3,6 +3,7 @@ import { escapeHtml, formatDate, siteUrl } from "./utils.js";
 import { INKPATH_VERSION } from "./version.js";
 
 export type DocumentAssets = {
+  commitSha?: string;
   diagrams: number;
   math: number;
   mermaidEntry?: string;
@@ -178,6 +179,13 @@ function renderFooter(site: Site, page: Page): string {
   </footer>`;
 }
 
+function renderBuildCommit(page: Page, commitSha?: string): string {
+  if (page.kind !== "home" || !commitSha) return "";
+  const shortSha = commitSha.slice(0, 7);
+  const commitUrl = `https://github.com/iamrajjoshi/inkpath/commit/${encodeURIComponent(commitSha)}`;
+  return `<footer class="build-commit"><a href="${commitUrl}"><code>${escapeHtml(shortSha)}</code></a></footer>`;
+}
+
 function absoluteCanonical(site: Site, page: Page): string | undefined {
   const base = site.config.site.url;
   if (!base) return undefined;
@@ -239,6 +247,7 @@ export function renderDocument(site: Site, page: Page, assets: DocumentAssets): 
   const title = page.kind === "home" ? siteTitle : `${page.title} · ${siteTitle}`;
   const canonical = absoluteCanonical(site, page);
   const bodyContent = `<article class="prose">${page.rendered}</article>`;
+  const buildCommit = renderBuildCommit(page, assets.commitSha);
   const listing = renderContentList(site, page);
   const script =
     assets.diagrams && assets.mermaidEntry
@@ -262,7 +271,7 @@ export function renderDocument(site: Site, page: Page, assets: DocumentAssets): 
   <link rel="stylesheet" href="${escapeHtml(stylesheetUrl(site))}">
   ${assets.math ? `<link rel="stylesheet" href="${escapeHtml(`${site.config.site.basePath}/_inkpath/katex/katex.min.css`)}">` : ""}
 </head>
-<body>
+<body${buildCommit ? ` class="has-build-commit"` : ""}>
   <a class="skip-link" href="#main-content">Skip to content</a>
   <header class="site-header">
     <div class="site-header__inner">
@@ -280,6 +289,7 @@ export function renderDocument(site: Site, page: Page, assets: DocumentAssets): 
     ${renderBacklinks(site, page)}
     ${renderFooter(site, page)}
   </main>
+  ${buildCommit}
   ${script}
 </body>
 </html>

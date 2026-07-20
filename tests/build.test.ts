@@ -68,7 +68,8 @@ async function outputHashes(root: string): Promise<Map<string, string>> {
 
 test("builds deterministic static pages with the complete Markdown surface", async () => {
   const project = await copyFixture();
-  const firstBuild = await buildSite(project);
+  const commitSha = "0123456789abcdef0123456789abcdef01234567";
+  const firstBuild = await buildSite(project, { commitSha });
   assert.equal(firstBuild.pages, 4);
   assert.equal(firstBuild.diagrams, 1);
   assert.equal(firstBuild.math, 2);
@@ -91,6 +92,15 @@ test("builds deterministic static pages with the complete Markdown surface", asy
     ),
   );
   assert.match(homePage, /Small examples of the supported Markdown surface/);
+  assert.match(homePage, /<body class="has-build-commit">/);
+  assert.match(
+    homePage,
+    /<footer class="build-commit"><a href="https:\/\/github\.com\/iamrajjoshi\/inkpath\/commit\/0123456789abcdef0123456789abcdef01234567"><code>0123456<\/code><\/a><\/footer>/,
+  );
+  assert.doesNotMatch(
+    [sectionPage, firstPage, secondPage].join("\n"),
+    /has-build-commit|class="build-commit"/,
+  );
   assert.match(
     homePage,
     /<img class="site-logo" src="\/docs\/favicon\.svg" alt="" width="28" height="28">/,
@@ -303,7 +313,7 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   );
 
   const hashesBefore = await outputHashes(output);
-  await buildSite(project);
+  await buildSite(project, { commitSha });
   assert.deepEqual(await outputHashes(output), hashesBefore);
 });
 

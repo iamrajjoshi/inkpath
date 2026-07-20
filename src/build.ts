@@ -28,6 +28,7 @@ import type { BuildResult, Page, InkpathConfig, Site } from "./types.js";
 import { isPathWithin, pathsOverlap } from "./utils.js";
 
 type BuildOptions = {
+  commitSha?: string;
   write?: boolean;
 };
 
@@ -127,6 +128,7 @@ async function writeOutput(
   renders: Map<Page, PageRender>,
   diagrams: number,
   math: number,
+  commitSha?: string,
 ): Promise<void> {
   const outputParent = path.dirname(config.outputDir);
   const outputName = path.basename(config.outputDir);
@@ -174,6 +176,7 @@ async function writeOutput(
       await writeFile(
         destination,
         renderDocument(site, page, {
+          ...(commitSha ? { commitSha } : {}),
           diagrams: render.diagrams,
           math: render.math,
           ...(mermaidEntry ? { mermaidEntry } : {}),
@@ -249,7 +252,9 @@ export async function buildSite(
     );
   }
   const orphans = orphanPages(site).length;
-  if (options.write !== false) await writeOutput(site, config, renders, diagrams, math);
+  if (options.write !== false) {
+    await writeOutput(site, config, renders, diagrams, math, options.commitSha);
+  }
 
   return {
     diagrams,

@@ -40,6 +40,12 @@ body {
   line-height: 1.5;
 }
 
+body.has-build-commit {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+}
+
 a {
   color: var(--interactive);
   text-decoration-color: currentColor;
@@ -147,6 +153,27 @@ a:hover {
   width: min(calc(100% - 2rem), var(--reading-width));
   margin: 0 auto;
   padding: 0.5rem 0 3rem;
+}
+
+.has-build-commit .page-shell {
+  flex: 1;
+}
+
+.build-commit {
+  width: min(calc(100% - 2rem), var(--reading-width));
+  margin: 0 auto;
+  padding: 0 0 1rem;
+  color: var(--faint);
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.build-commit code {
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+.build-commit a {
+  color: inherit;
 }
 
 .page-header {
@@ -677,7 +704,8 @@ details.annotation[open] > summary.annotation__label {
 @media print {
   .site-header,
   .skip-link,
-  .page-pagination {
+  .page-pagination,
+  .build-commit {
     display: none;
   }
 
