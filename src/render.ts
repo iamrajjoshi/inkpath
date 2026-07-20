@@ -182,8 +182,7 @@ function renderFooter(site: Site, page: Page): string {
 function renderBuildCommit(page: Page, commitSha?: string): string {
   if (page.kind !== "home" || !commitSha) return "";
   const shortSha = commitSha.slice(0, 7);
-  const commitUrl = `https://github.com/iamrajjoshi/inkpath/commit/${encodeURIComponent(commitSha)}`;
-  return `<footer class="build-commit"><a href="${commitUrl}"><code>${escapeHtml(shortSha)}</code></a></footer>`;
+  return `<footer class="build-commit">Commit <code>${escapeHtml(shortSha)}</code></footer>`;
 }
 
 function absoluteCanonical(site: Site, page: Page): string | undefined {

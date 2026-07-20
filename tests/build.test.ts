@@ -93,10 +93,7 @@ test("builds deterministic static pages with the complete Markdown surface", asy
   );
   assert.match(homePage, /Small examples of the supported Markdown surface/);
   assert.match(homePage, /<body class="has-build-commit">/);
-  assert.match(
-    homePage,
-    /<footer class="build-commit"><a href="https:\/\/github\.com\/iamrajjoshi\/inkpath\/commit\/0123456789abcdef0123456789abcdef01234567"><code>0123456<\/code><\/a><\/footer>/,
-  );
+  assert.match(homePage, /<footer class="build-commit">Commit <code>0123456<\/code><\/footer>/);
   assert.doesNotMatch(
     [sectionPage, firstPage, secondPage].join("\n"),
     /has-build-commit|class="build-commit"/,
