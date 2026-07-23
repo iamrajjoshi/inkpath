@@ -1,10 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
-import { cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { build as esbuild } from "esbuild";
 import { contributingPackageRoots, renderThirdPartyNotices } from "./notices.js";
 import { mermaidClientSource } from "./theme.js";
 
@@ -33,32 +32,110 @@ async function assetCacheIdentity(directory: string, files: string[]): Promise<s
   return identity.digest("hex");
 }
 
-async function readManifest(directory: string): Promise<MermaidAssets | undefined> {
+function validCacheFile(file: unknown): file is string {
+  if (
+    typeof file !== "string" ||
+    path.posix.isAbsolute(file) ||
+    path.win32.isAbsolute(file) ||
+    file.includes("\\") ||
+    path.posix.basename(file) === "manifest.json"
+  ) {
+    return false;
+  }
+  return file.split("/").every((segment) => segment && segment !== "." && segment !== "..");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+async function hasExactRegularFileTree(
+  directory: string,
+  files: readonly string[],
+): Promise<boolean> {
+  const root = await lstat(directory);
+  if (root.isSymbolicLink() || !root.isDirectory()) return false;
+
+  const expectedFiles = new Set([...files, thirdPartyNoticesName, "manifest.json"]);
+  const expectedDirectories = new Set<string>();
+  for (const file of expectedFiles) {
+    const segments = file.split("/");
+    for (let index = 1; index < segments.length; index += 1) {
+      expectedDirectories.add(segments.slice(0, index).join("/"));
+    }
+  }
+
+  const foundFiles = new Set<string>();
+  const visit = async (relativeDirectory = ""): Promise<boolean> => {
+    const absoluteDirectory = relativeDirectory
+      ? path.join(directory, ...relativeDirectory.split("/"))
+      : directory;
+    for (const entry of await readdir(absoluteDirectory, { withFileTypes: true })) {
+      const relativePath = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
+      const info = await lstat(path.join(absoluteDirectory, entry.name));
+      if (info.isSymbolicLink()) return false;
+      if (info.isDirectory()) {
+        if (!expectedDirectories.has(relativePath) || !(await visit(relativePath))) return false;
+      } else if (info.isFile()) {
+        if (!expectedFiles.has(relativePath)) return false;
+        foundFiles.add(relativePath);
+      } else {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  return (
+    (await visit()) &&
+    foundFiles.size === expectedFiles.size &&
+    [...expectedFiles].every((file) => foundFiles.has(file))
+  );
+}
+
+export async function readMermaidAssetManifest(
+  directory: string,
+): Promise<MermaidAssets | undefined> {
   try {
-    const parsed = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8")) as {
-      entry?: unknown;
-      files?: unknown;
-      identity?: unknown;
-      notice?: unknown;
-    };
+    const rootInfo = await lstat(directory);
+    const manifestInfo = await lstat(path.join(directory, "manifest.json"));
     if (
+      rootInfo.isSymbolicLink() ||
+      !rootInfo.isDirectory() ||
+      manifestInfo.isSymbolicLink() ||
+      !manifestInfo.isFile()
+    ) {
+      return undefined;
+    }
+    const parsed: unknown = JSON.parse(
+      await readFile(path.join(directory, "manifest.json"), "utf8"),
+    );
+    if (
+      !isRecord(parsed) ||
       typeof parsed.entry !== "string" ||
       !/^inkpath-[A-Z0-9]+\.js$/.test(parsed.entry) ||
       typeof parsed.identity !== "string" ||
       !/^[a-f0-9]{64}$/.test(parsed.identity) ||
       parsed.notice !== thirdPartyNoticesName ||
       !Array.isArray(parsed.files) ||
-      parsed.files.some(
-        (file) =>
-          typeof file !== "string" ||
-          path.posix.isAbsolute(file) ||
-          file.split("/").some((segment) => !segment || segment === ".."),
-      )
+      !parsed.files.every(validCacheFile)
+    ) {
+      return undefined;
+    }
+    const files = parsed.files;
+    const canonicalFiles = [...files].sort();
+    if (
+      files.length === 0 ||
+      new Set(files).size !== files.length ||
+      files.some((file, index) => file !== canonicalFiles[index]) ||
+      files.includes(thirdPartyNoticesName) ||
+      !files.includes(parsed.entry)
     ) {
       return undefined;
     }
     if (path.basename(directory) !== `mermaid-${parsed.identity}`) return undefined;
-    if ((await assetCacheIdentity(directory, parsed.files as string[])) !== parsed.identity) {
+    if (!(await hasExactRegularFileTree(directory, files))) return undefined;
+    if ((await assetCacheIdentity(directory, files)) !== parsed.identity) {
       return undefined;
     }
     return { directory, entry: parsed.entry };
@@ -73,6 +150,7 @@ async function createMermaidAssets(): Promise<MermaidAssets> {
   const temporary = path.join(cacheRoot, `.mermaid-${randomUUID()}`);
   await mkdir(temporary);
   try {
+    const { build: esbuild } = await import("esbuild");
     const result = await esbuild({
       absWorkingDir: packageRoot,
       bundle: true,
@@ -119,7 +197,7 @@ async function createMermaidAssets(): Promise<MermaidAssets> {
       `${JSON.stringify({ entry, files, identity, notice: thirdPartyNoticesName }, null, 2)}\n`,
       "utf8",
     );
-    const cached = await readManifest(directory);
+    const cached = await readMermaidAssetManifest(directory);
     if (cached) {
       await rm(temporary, { recursive: true, force: true });
       return cached;
@@ -127,7 +205,7 @@ async function createMermaidAssets(): Promise<MermaidAssets> {
     try {
       await rename(temporary, directory);
     } catch (error) {
-      const existing = await readManifest(directory);
+      const existing = await readMermaidAssetManifest(directory);
       if (existing) {
         await rm(temporary, { recursive: true, force: true });
         return existing;
@@ -142,7 +220,7 @@ async function createMermaidAssets(): Promise<MermaidAssets> {
       try {
         await rename(temporary, directory);
       } catch {
-        const concurrent = await readManifest(directory);
+        const concurrent = await readMermaidAssetManifest(directory);
         if (!concurrent) throw error;
         await rm(temporary, { recursive: true, force: true });
         return concurrent;
@@ -157,7 +235,7 @@ async function createMermaidAssets(): Promise<MermaidAssets> {
   }
 }
 
-export function getMermaidAssets(): Promise<MermaidAssets> {
+function getMermaidAssets(): Promise<MermaidAssets> {
   mermaidAssetsPromise ??= createMermaidAssets().catch((error: unknown) => {
     mermaidAssetsPromise = undefined;
     throw error;

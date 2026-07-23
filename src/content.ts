@@ -1,6 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import YAML from "yaml";
+import { mapConcurrentOrdered } from "./concurrency.js";
 import { assertKnownKeys } from "./schema.js";
 import type { Frontmatter, Page, InkpathConfig, Site } from "./types.js";
 import {
@@ -23,6 +24,28 @@ type SourceDocument = {
   sourcePath: string;
 };
 
+type DerivedPageFields = Pick<
+  Page,
+  "attributes" | "body" | "order" | "readingMinutes" | "slug" | "summary" | "title"
+>;
+
+type PageUpdateChanges = {
+  attributes: boolean;
+  body: boolean;
+  draft: boolean;
+  order: boolean;
+  readingMinutes: boolean;
+  slug: boolean;
+  summary: boolean;
+  title: boolean;
+};
+
+export type ParsedPageUpdate = DerivedPageFields & {
+  changes: PageUpdateChanges;
+  draft: boolean;
+  requiresStructuralRebuild: boolean;
+};
+
 const FRONTMATTER_KEYS = [
   "title",
   "description",
@@ -37,6 +60,55 @@ const FRONTMATTER_KEYS = [
   "updated",
   "draft",
 ] as const;
+
+const CONTENT_READ_CONCURRENCY = 32;
+
+type FrontmatterMapping = Record<string, unknown>;
+
+function isFrontmatterMapping(value: unknown): value is FrontmatterMapping {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function assertValidFrontmatter(
+  attributes: FrontmatterMapping,
+  relativePath: string,
+): asserts attributes is FrontmatterMapping & Frontmatter {
+  for (const key of ["title", "description", "summary", "slug", "identifier"] as const) {
+    const value = attributes[key];
+    if (value !== undefined && (typeof value !== "string" || !value.trim())) {
+      throw new Error(`${relativePath}: ${key} must be a non-empty string`);
+    }
+  }
+  for (const key of ["duration", "difficulty"] as const) {
+    const value = attributes[key];
+    if (value !== undefined && (typeof value !== "string" || !value.trim())) {
+      throw new Error(`${relativePath}: ${key} must be a non-empty string`);
+    }
+  }
+  for (const key of ["date", "updated"] as const) {
+    const value = attributes[key];
+    if (value !== undefined && !(typeof value === "string" || value instanceof Date)) {
+      throw new Error(`${relativePath}: ${key} must be a date`);
+    }
+    if (value !== undefined && Number.isNaN(new Date(value).valueOf())) {
+      throw new Error(`${relativePath}: ${key} must be a valid date`);
+    }
+  }
+  const order = attributes.order;
+  if (order !== undefined && (typeof order !== "number" || !Number.isInteger(order) || order < 0)) {
+    throw new Error(`${relativePath}: order must be a non-negative integer`);
+  }
+  const tags = attributes.tags;
+  if (
+    tags !== undefined &&
+    (!Array.isArray(tags) || tags.some((tag) => typeof tag !== "string" || !tag.trim()))
+  ) {
+    throw new Error(`${relativePath}: tags must be a list of strings`);
+  }
+  if (attributes.draft !== undefined && typeof attributes.draft !== "boolean") {
+    throw new Error(`${relativePath}: draft must be true or false`);
+  }
+}
 
 async function walkMarkdown(directory: string, root = directory): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -71,11 +143,11 @@ function parseFrontmatter(
   const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
   if (!match) throw new Error(`${relativePath}: frontmatter is missing its closing ---`);
   const parsed: unknown = YAML.parse(match[1] ?? "");
-  if (parsed !== null && (typeof parsed !== "object" || Array.isArray(parsed))) {
+  if (parsed !== null && !isFrontmatterMapping(parsed)) {
     throw new Error(`${relativePath}: frontmatter must be a YAML mapping`);
   }
 
-  const attributes = (parsed ?? {}) as Frontmatter;
+  const attributes = parsed ?? {};
   assertKnownKeys(attributes, FRONTMATTER_KEYS, {
     hints: {
       number:
@@ -84,43 +156,7 @@ function parseFrontmatter(
     source: relativePath,
     scope: "frontmatter",
   });
-  for (const key of ["title", "description", "summary", "slug", "identifier"] as const) {
-    const value = attributes[key];
-    if (value !== undefined && (typeof value !== "string" || !value.trim())) {
-      throw new Error(`${relativePath}: ${key} must be a non-empty string`);
-    }
-  }
-  for (const key of ["duration", "difficulty"] as const) {
-    const value = attributes[key];
-    if (value !== undefined && (typeof value !== "string" || !value.trim())) {
-      throw new Error(`${relativePath}: ${key} must be a non-empty string`);
-    }
-  }
-  for (const key of ["date", "updated"] as const) {
-    const value = attributes[key];
-    if (value !== undefined && !(typeof value === "string" || value instanceof Date)) {
-      throw new Error(`${relativePath}: ${key} must be a date`);
-    }
-    if (value !== undefined && Number.isNaN(new Date(value).valueOf())) {
-      throw new Error(`${relativePath}: ${key} must be a valid date`);
-    }
-  }
-  if (
-    attributes.order !== undefined &&
-    (!Number.isInteger(attributes.order) || attributes.order < 0)
-  ) {
-    throw new Error(`${relativePath}: order must be a non-negative integer`);
-  }
-  if (
-    attributes.tags !== undefined &&
-    (!Array.isArray(attributes.tags) ||
-      attributes.tags.some((tag) => typeof tag !== "string" || !tag.trim()))
-  ) {
-    throw new Error(`${relativePath}: tags must be a list of strings`);
-  }
-  if (attributes.draft !== undefined && typeof attributes.draft !== "boolean") {
-    throw new Error(`${relativePath}: draft must be true or false`);
-  }
+  assertValidFrontmatter(attributes, relativePath);
 
   return {
     attributes,
@@ -267,6 +303,118 @@ function validSlug(value: string, relativePath: string): string {
   return slug;
 }
 
+function documentSlug(document: SourceDocument): string {
+  if (document.isIndex) {
+    if (!document.directory) return "";
+    return validSlug(
+      document.attributes.slug ?? stripOrderPrefix(document.directory.split("/").at(-1) ?? ""),
+      document.relativePath,
+    );
+  }
+
+  const stem = document.fileName.replace(/\.md$/i, "");
+  return validSlug(document.attributes.slug ?? stripOrderPrefix(stem), document.relativePath);
+}
+
+function derivePageFields(document: SourceDocument): DerivedPageFields {
+  const slug = documentSlug(document);
+  const title =
+    document.attributes.title?.trim() ||
+    firstHeading(document.body) ||
+    titleFromSlug(slug || "home");
+  const body = stripLeadingTitle(document.body);
+  const summary =
+    document.attributes.summary?.trim() ||
+    document.attributes.description?.trim() ||
+    deriveSummary(body) ||
+    title;
+  const stem = document.fileName.replace(/\.md$/i, "");
+  const order =
+    document.attributes.order ??
+    orderFromName(document.isIndex ? (document.directory.split("/").at(-1) ?? "") : stem);
+
+  return {
+    attributes: document.attributes,
+    body,
+    order,
+    readingMinutes: readingMinutes(body),
+    slug,
+    summary,
+    title,
+  };
+}
+
+function frontmatterValueEquals(key: string, left: unknown, right: unknown): boolean {
+  if ((key === "date" || key === "updated") && left !== undefined && right !== undefined) {
+    const leftTime = new Date(left as string | Date).valueOf();
+    const rightTime = new Date(right as string | Date).valueOf();
+    return leftTime === rightTime;
+  }
+  if (left instanceof Date || right instanceof Date) {
+    return left instanceof Date && right instanceof Date && left.valueOf() === right.valueOf();
+  }
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => Object.is(value, right[index]))
+    );
+  }
+  return Object.is(left, right);
+}
+
+function frontmatterEquals(left: Frontmatter, right: Frontmatter): boolean {
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const keys = [...new Set([...Object.keys(leftRecord), ...Object.keys(rightRecord)])]
+    .filter((key) => leftRecord[key] !== undefined || rightRecord[key] !== undefined)
+    .sort();
+  return keys.every((key) => frontmatterValueEquals(key, leftRecord[key], rightRecord[key]));
+}
+
+function sourceDocument(raw: string, relativePath: string, sourcePath: string): SourceDocument {
+  const parsed = parseFrontmatter(raw, relativePath);
+  const fileName = path.posix.basename(relativePath);
+  return {
+    ...parsed,
+    directory: path.posix.dirname(relativePath) === "." ? "" : path.posix.dirname(relativePath),
+    fileName,
+    isIndex: /^index\.md$/i.test(fileName),
+    relativePath,
+    sourcePath,
+  };
+}
+
+/**
+ * Parses and derives an update to an existing published page without touching
+ * the filesystem or mutating the current page. Structural changes are called
+ * out so incremental callers can conservatively fall back to a graph rebuild.
+ */
+export function parsePageUpdate(raw: string, existingPage: Readonly<Page>): ParsedPageUpdate {
+  const fields = derivePageFields(
+    sourceDocument(raw, existingPage.relativePath, existingPage.sourcePath),
+  );
+  const draft = fields.attributes.draft === true;
+  const changes: PageUpdateChanges = {
+    attributes: !frontmatterEquals(fields.attributes, existingPage.attributes),
+    body: fields.body !== existingPage.body,
+    draft: draft !== (existingPage.attributes.draft === true),
+    order: fields.order !== existingPage.order,
+    readingMinutes: fields.readingMinutes !== existingPage.readingMinutes,
+    slug: fields.slug !== existingPage.slug,
+    summary: fields.summary !== existingPage.summary,
+    title: fields.title !== existingPage.title,
+  };
+
+  return {
+    ...fields,
+    changes,
+    draft,
+    requiresStructuralRebuild: changes.draft || changes.slug || changes.order || changes.title,
+  };
+}
+
 function routeSegmentsForDirectory(
   directory: string,
   indexByDirectory: Map<string, SourceDocument>,
@@ -328,27 +476,25 @@ export async function loadSite(config: InkpathConfig): Promise<Site> {
   }
   if (!relativePaths.length) throw new Error("content directory contains no Markdown files");
 
-  const documents: SourceDocument[] = [];
-  for (const relativeFilePath of relativePaths) {
-    const sourcePath = path.join(config.contentDir, relativeFilePath);
-    const relativePath = toPosix(relativeFilePath);
-    const fileName = path.posix.basename(relativePath);
-    if (/^readme\.md$/i.test(fileName)) {
-      throw new Error(
-        `${relativePath}: content overview files must be named INDEX.md, not README.md`,
-      );
-    }
-    const parsed = parseFrontmatter(await readFile(sourcePath, "utf8"), relativePath);
-    if (parsed.attributes.draft) continue;
-    documents.push({
-      ...parsed,
-      directory: path.posix.dirname(relativePath) === "." ? "" : path.posix.dirname(relativePath),
-      fileName,
-      isIndex: /^index\.md$/i.test(fileName),
-      relativePath,
-      sourcePath,
-    });
-  }
+  const loadedDocuments = await mapConcurrentOrdered(
+    relativePaths,
+    async (relativeFilePath) => {
+      const sourcePath = path.join(config.contentDir, relativeFilePath);
+      const relativePath = toPosix(relativeFilePath);
+      const fileName = path.posix.basename(relativePath);
+      if (/^readme\.md$/i.test(fileName)) {
+        throw new Error(
+          `${relativePath}: content overview files must be named INDEX.md, not README.md`,
+        );
+      }
+      const document = sourceDocument(await readFile(sourcePath, "utf8"), relativePath, sourcePath);
+      return document.attributes.draft ? undefined : document;
+    },
+    CONTENT_READ_CONCURRENCY,
+  );
+  const documents = loadedDocuments.filter(
+    (document): document is SourceDocument => document !== undefined,
+  );
 
   const indexByDirectory = new Map<string, SourceDocument>();
   for (const document of documents.filter((item) => item.isIndex)) {
@@ -374,47 +520,27 @@ export async function loadSite(config: InkpathConfig): Promise<Site> {
   const sectionByDirectory = new Map<string, Page>();
 
   for (const document of documents) {
-    const stem = document.fileName.replace(/\.md$/i, "");
     const directorySegments = routeSegmentsForDirectory(document.directory, indexByDirectory);
     const isHome = document.isIndex && !document.directory;
     const kind = isHome ? "home" : document.isIndex ? "section" : "page";
-    const slug = document.isIndex
-      ? (directorySegments.at(-1) ?? "")
-      : validSlug(document.attributes.slug ?? stripOrderPrefix(stem), document.relativePath);
+    const fields = derivePageFields(document);
     const route = isHome
       ? "/"
-      : normalizeRoute([...directorySegments, ...(document.isIndex ? [] : [slug])].join("/"));
-    const title =
-      document.attributes.title?.trim() ||
-      firstHeading(document.body) ||
-      titleFromSlug(slug || "home");
-    const body = stripLeadingTitle(document.body);
-    const summary =
-      document.attributes.summary?.trim() ||
-      document.attributes.description?.trim() ||
-      deriveSummary(body) ||
-      title;
-    const order =
-      document.attributes.order ??
-      orderFromName(document.isIndex ? (document.directory.split("/").at(-1) ?? "") : stem);
+      : normalizeRoute(
+          [...directorySegments, ...(document.isIndex ? [] : [fields.slug])].join("/"),
+        );
     const page: Page = {
-      attributes: document.attributes,
+      ...fields,
       backlinks: [],
-      body,
       children: [],
       depth: route.split("/").filter(Boolean).length,
       headings: [],
       kind,
-      order,
-      readingMinutes: readingMinutes(body),
       relativePath: document.relativePath,
       rendered: "",
       route,
-      slug,
       sourceDirectory: document.directory,
       sourcePath: document.sourcePath,
-      summary,
-      title,
     };
 
     if (pageByRoute.has(route)) {

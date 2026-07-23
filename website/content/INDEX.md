@@ -47,6 +47,14 @@ pnpm exec inkpath dev
 
 The development server watches Markdown, configuration, and public files. A successful edit rebuilds the site and refreshes the browser; a failed build leaves the last valid output in place.
 
+## Measured performance
+
+On an Apple M4 Pro with Node.js 26.5.0, the deterministic 10,000-page benchmark measured a 2.28-second median clean build, a 6.25-millisecond body-only edit, and a 0.68-millisecond no-op rebuild. A separate validated 100,000-page body edit measured 10.22 milliseconds median and 14.14 milliseconds p95. The isolated persistent-engine worker peaked at 235 MiB RSS during the 10,000-page body edit. A representative ordinary page plus shared CSS transferred 4.0 KiB with gzip or 3.3 KiB with Brotli and contained no Inkpath JavaScript.
+
+A reproducible 1,000-page persistent-development run measured 60.62 milliseconds median and 61.98 milliseconds p95 from source edit through watcher build completion. The benchmark report also records 10,000-page structural and clean-build validation samples.
+
+Body and link edits to existing notes update the affected graph. Title and order edits write only affected documents but still rebuild site-wide navigation and rendering indexes. Route and draft-state changes, additions, deletions, renames, and coalesced multi-file Markdown saves reconstruct topology from cached page state, validate the complete link graph, and transactionally publish affected outputs. Configuration, public assets, direct content-asset events, and transitions that add the first or remove the last Mermaid or KaTeX page still use a complete validated build. The watcher uses a 55-millisecond quiet period for an isolated change, 75 milliseconds for a burst, and a 90-millisecond maximum wait; engine timings and browser reload are separate. The [full Inkpath benchmark report](https://github.com/iamrajjoshi/inkpath/blob/main/benchmarks/results/final.md) includes reproducible commands, p95 results, target misses, and limitations. A separate [pinned Hugo, MkDocs, Docusaurus, and Quartz comparison](https://github.com/iamrajjoshi/inkpath/blob/main/benchmarks/results/comparison.md) reports its defined native configurations without making a universal fastest-generator claim.
+
 ## One source tree, one site graph
 
 Inkpath reads the content tree, resolves page relationships, validates references, and then writes the static site. Public files pass through unchanged.

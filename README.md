@@ -1,19 +1,51 @@
-# Inkpath
+<p align="center">
+  <img src="assets/inkpath.svg" width="72" height="72" alt="Inkpath">
+</p>
 
-Inkpath builds static notes and documentation sites from Markdown. It writes plain HTML and CSS and serves a live preview while you edit. Built pages use browser JavaScript only when they contain a Mermaid diagram.
+<h1 align="center">Inkpath</h1>
 
-> [!NOTE]
-> [See a live Inkpath demo](https://inkpath.dev/).
+<p align="center"><strong>Fast, strict static sites for Markdown notes and documentation.</strong></p>
 
-## Install
+<p align="center">
+  <a href="https://github.com/iamrajjoshi/inkpath/actions/workflows/ci.yml"><img alt="CI status" src="https://github.com/iamrajjoshi/inkpath/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-0f766e.svg"></a>
+  <a href="package.json"><img alt="Node.js 22.13 or newer" src="https://img.shields.io/badge/node-%3E%3D22.13-339933.svg?logo=nodedotjs&logoColor=white"></a>
+</p>
+
+<p align="center">
+  <a href="https://inkpath.dev/">Live demo</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#measured-performance">Benchmarks</a> ·
+  <a href="https://github.com/iamrajjoshi/inkpath/issues">Issues</a>
+</p>
+
+Inkpath turns a Markdown directory into a static notes or documentation site. It rejects broken links, anchors, and local assets before publishing; a failed development rebuild leaves the previous valid site online.
+
+- Rebuild cost follows the affected content instead of total site size.
+- Ordinary pages contain plain HTML and CSS with no Inkpath JavaScript.
+- Directories become nested navigation, with backlinks and adjacent-page links generated automatically.
+- Output stays deterministic and can be deployed to any static host.
+
+## Quick start
 
 Inkpath requires Node.js 22.13 or newer.
 
 ```bash
-pnpm add -D inkpath
+npm install --save-dev inkpath
+# or: pnpm add -D inkpath
 ```
 
-## Create a site
+Add the Inkpath commands to `package.json`:
+
+```json
+{
+  "scripts": {
+    "build": "inkpath build",
+    "check": "inkpath check",
+    "dev": "inkpath dev"
+  }
+}
+```
 
 Add a `content/INDEX.md` file:
 
@@ -29,19 +61,68 @@ Write the home page here.
 Start the development server:
 
 ```bash
-pnpm exec inkpath dev
+npm run dev
 ```
 
 Open `http://127.0.0.1:3000`. Saving Markdown, configuration, or files under `public/` rebuilds the site and refreshes the page.
 
-Other commands:
+| Command         | Purpose                                           |
+| --------------- | ------------------------------------------------- |
+| `npm run dev`   | Serve the site and rebuild it after local changes |
+| `npm run check` | Validate without writing output                   |
+| `npm run build` | Write the static site to `site/`                  |
 
-```bash
-pnpm exec inkpath check   # validate without writing output
-pnpm exec inkpath build   # write the static site to site/
-pnpm exec inkpath --help
-pnpm exec inkpath --version
+Pass a project path or options after `--`, such as `npm run dev -- ./notes --port 4000`. If you don't want to add scripts, the direct form remains available: `npx inkpath dev`.
+
+Deploy the generated `site/` directory to GitHub Pages, Netlify, Cloudflare Pages, S3, or any other static host.
+
+## Measured performance
+
+These results come from the deterministic `core` fixture on an Apple M4 Pro with Node.js 26.5.0. Medians use isolated workers unless the row says otherwise. The report pins the exact artifact for each run; structural and watcher results are follow-up validations, while the clean, body-edit, 100,000-page, and byte rows come from the original publication suite.
+
+| Measurement                                 | Result                       |
+| ------------------------------------------- | ---------------------------- |
+| 10,000-page clean build                     | 2,282.81 ms median           |
+| 10,000-page body edit inside the engine     | 6.25 ms median               |
+| 10,000-page add, delete, rename, route edit | 118.62–127.38 ms, one sample |
+| 100,000-page body edit                      | 10.22 ms median              |
+| Source edit through watcher completion      | 60.62 ms median, 61.98 p95   |
+| Ordinary page plus shared CSS               | 4,026 B gzip, no JavaScript  |
+
+### Pinned 1,000-page comparison
+
+| Tool        | Fresh production build | Persistent body edit | Whole-site Brotli output | Standalone JavaScript |
+| ----------- | ---------------------: | -------------------: | -----------------------: | --------------------: |
+| **Inkpath** |                0.415 s |              98.2 ms |                 0.92 MiB |                   0 B |
+| Hugo        |                0.329 s |             500.0 ms |                 0.32 MiB |                   0 B |
+| Quartz      |                1.761 s |             319.8 ms |                 1.73 MiB |                 664 B |
+| MkDocs      |                5.089 s |           5,053.8 ms |                 4.81 MiB |              91,523 B |
+| Docusaurus  |               49.092 s |             333.8 ms |                 5.36 MiB |           4,425,152 B |
+
+Lower is better. The table keeps the original all-tool run intact; a later Inkpath-only scheduler run measured 60.62 ms for the same development boundary. The tools did not render identical feature sets: Hugo used minimal templates without generated navigation or CSS, while MkDocs and Docusaurus emitted fuller navigation and application assets. Quartz ran with several optional browser features disabled.
+
+Every writing benchmark hashes the complete output tree and rejects an incremental result that differs from a clean build after the same mutation. Read the [benchmark methodology](benchmarks/README.md), [Inkpath results](benchmarks/results/final.md), and [pinned cross-tool report](benchmarks/results/comparison.md) for commands, raw samples, memory, byte counts, and measurement limits.
+
+## Why rebuilds are fast
+
+```mermaid
+flowchart LR
+  accTitle: Inkpath rebuild pipeline
+  accDescr: File events are batched, classified, validated, and published through an incremental or complete build path.
+  event["File event"] --> batch["Adaptive batch<br/>55–90 ms"]
+  batch --> scope{"Change scope"}
+  scope -->|"Body, links, metadata"| partial["Invalidate affected pages"]
+  scope -->|"Add, delete, rename, route"| topology["Reconcile cached topology"]
+  scope -->|"Configuration, public files"| full["Full validated build"]
+  partial --> validate["Validate the complete graph"]
+  topology --> validate
+  validate --> changed["Publish changed files<br/>with rollback"]
+  full --> staged["Publish staged output tree"]
 ```
+
+Most of the speedup came from doing less work. A body edit reads and parses one source, updates its graph edges, renders the pages whose HTML can change, then writes only changed output. Additions, deletions, renames, and route changes rebuild topology from cached page objects instead of reparsing every Markdown file.
+
+Clean builds overlap bounded file reads and writes, reuse Markdown and document-rendering setup across pages, build backlinks with sets, pre-plan destination directories, and reuse content-addressed Mermaid assets. None of these paths skips validation: Inkpath checks the resulting graph before publication and commits cached state only after output succeeds.
 
 ## Content
 
@@ -186,7 +267,28 @@ theme:
 
 Inkpath links this file instead of generating `_inkpath/theme.css`. A custom stylesheet cannot be combined with theme color settings.
 
-## Development
+## Library API
+
+The package exports the clean builder, persistent engine, configuration loader, content loader, and their TypeScript types:
+
+```ts
+import { buildSite, createBuildEngine } from "inkpath";
+
+const result = await buildSite("./notes");
+console.log(`Built ${result.pages} pages`);
+
+const engine = createBuildEngine("./notes");
+try {
+  await engine.build();
+  await engine.rebuild(["content/changed-note.md"]);
+} finally {
+  await engine.close();
+}
+```
+
+Use `buildSite` for one-shot builds and checks. `createBuildEngine` retains parsed content and graph state for long-running integrations.
+
+## Repository development
 
 ```bash
 pnpm install
@@ -195,3 +297,5 @@ pnpm package:check
 ```
 
 `pnpm verify` runs type checking, tests, content validation, and the example build. `pnpm package:check` packs Inkpath, installs the archive in a temporary project, runs the CLI, builds a site, and imports the library API.
+
+Report bugs or request features through [GitHub Issues](https://github.com/iamrajjoshi/inkpath/issues). Inkpath is available under the [MIT license](LICENSE).

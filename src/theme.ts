@@ -172,10 +172,6 @@ a:hover {
   font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
 }
 
-.build-commit a {
-  color: inherit;
-}
-
 .page-header {
   margin: 0.5rem 0 2rem;
 }

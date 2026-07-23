@@ -33,10 +33,20 @@ const annotationLabels = {
   CAUTION: "Caution",
 } as const;
 
+const generatedHeadingPermalink = "inkpathGeneratedHeadingPermalink";
+
 type AnnotationKind = keyof typeof annotationLabels;
 
-function installAnnotations(markdown: MarkdownIt, environment: RenderEnvironment): void {
+function renderEnvironment(value: unknown): RenderEnvironment {
+  if (!value || typeof value !== "object") {
+    throw new Error("Inkpath Markdown renderer received an invalid render environment");
+  }
+  return value as RenderEnvironment;
+}
+
+function installAnnotations(markdown: MarkdownIt): void {
   markdown.core.ruler.before("inline", "inkpath-annotations", (state) => {
+    const environment = renderEnvironment(state.env);
     for (let index = 0; index < state.tokens.length; index += 1) {
       const opening = state.tokens[index];
       const paragraphOpening = state.tokens[index + 1];
@@ -111,9 +121,7 @@ function installAnnotations(markdown: MarkdownIt, environment: RenderEnvironment
   });
 }
 
-function installMath(markdown: MarkdownIt, environment: RenderEnvironment): void {
-  if (!environment.site.config.markdown.math) return;
-
+function installMath(markdown: MarkdownIt): void {
   markdown.block.ruler.before(
     "fence",
     "inkpath-math-block",
@@ -178,7 +186,11 @@ function installMath(markdown: MarkdownIt, environment: RenderEnvironment): void
     return true;
   });
 
-  const renderMath = (source: string, displayMode: boolean): string => {
+  const renderMath = (
+    source: string,
+    displayMode: boolean,
+    environment: RenderEnvironment,
+  ): string => {
     try {
       environment.mathCount += 1;
       return loadKatex().renderToString(source, {
@@ -193,10 +205,14 @@ function installMath(markdown: MarkdownIt, environment: RenderEnvironment): void
       throw new Error(`${environment.page.relativePath}: invalid KaTeX expression: ${detail}`);
     }
   };
-  markdown.renderer.rules.inkpath_math_inline = (tokens, index) =>
-    renderMath(tokens[index]?.content ?? "", false);
-  markdown.renderer.rules.inkpath_math_block = (tokens, index) =>
-    `<div class="math-display">${renderMath(tokens[index]?.content ?? "", true)}</div>\n`;
+  markdown.renderer.rules.inkpath_math_inline = (tokens, index, options, env) =>
+    renderMath(tokens[index]?.content ?? "", false, renderEnvironment(env));
+  markdown.renderer.rules.inkpath_math_block = (tokens, index, options, env) =>
+    `<div class="math-display">${renderMath(
+      tokens[index]?.content ?? "",
+      true,
+      renderEnvironment(env),
+    )}</div>\n`;
 }
 
 function footnoteLabelId(environment: RenderEnvironment): string {
@@ -277,17 +293,18 @@ function validateMermaid(source: string, page: Page): void {
   }
 }
 
-function createMarkdown(environment: RenderEnvironment): MarkdownIt {
+function createMarkdown(math: boolean): MarkdownIt {
   const markdown = new MarkdownIt({
     html: false,
     linkify: true,
     typographer: false,
   }).use(footnote);
 
-  installAnnotations(markdown, environment);
-  installMath(markdown, environment);
+  installAnnotations(markdown);
+  if (math) installMath(markdown);
 
-  markdown.renderer.rules.footnote_block_open = () => {
+  markdown.renderer.rules.footnote_block_open = (tokens, index, options, env) => {
+    const environment = renderEnvironment(env);
     const labelId = footnoteLabelId(environment);
     return `<section class="footnotes" aria-labelledby="${labelId}">\n<h2 class="visually-hidden" id="${labelId}">Footnotes</h2>\n<ol class="footnotes-list">\n`;
   };
@@ -321,6 +338,7 @@ function createMarkdown(environment: RenderEnvironment): MarkdownIt {
   };
 
   markdown.core.ruler.push("inkpath-heading-ids", (state) => {
+    const environment = renderEnvironment(state.env);
     const counts = new Map<string, number>();
     for (let index = 0; index < state.tokens.length; index += 1) {
       const token = state.tokens[index];
@@ -343,6 +361,7 @@ function createMarkdown(environment: RenderEnvironment): MarkdownIt {
         linkOpening.attrSet("class", "heading-permalink");
         linkOpening.attrSet("href", `#${id}`);
         linkOpening.attrSet("aria-label", `Permalink to ${title}`);
+        linkOpening.meta = { [generatedHeadingPermalink]: true };
         const marker = new state.Token("text", "", 0);
         marker.content = "#";
         const linkClosing = new state.Token("link_close", "a", -1);
@@ -351,7 +370,8 @@ function createMarkdown(environment: RenderEnvironment): MarkdownIt {
     }
   });
 
-  markdown.renderer.rules.fence = (tokens, index) => {
+  markdown.renderer.rules.fence = (tokens, index, options, env) => {
+    const environment = renderEnvironment(env);
     const token = tokens[index];
     if (!token) return "";
     const language = token.info.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
@@ -374,9 +394,12 @@ function createMarkdown(environment: RenderEnvironment): MarkdownIt {
 
   const defaultLinkOpen = markdown.renderer.rules.link_open;
   markdown.renderer.rules.link_open = (tokens, index, options, env, renderer) => {
+    const environment = renderEnvironment(env);
     const token = tokens[index];
     const href = token?.attrGet("href");
-    if (token && href) token.attrSet("href", rewriteReference(href, environment));
+    if (token && href && token.meta?.[generatedHeadingPermalink] !== true) {
+      token.attrSet("href", rewriteReference(href, environment));
+    }
     return defaultLinkOpen
       ? defaultLinkOpen(tokens, index, options, env, renderer)
       : renderer.renderToken(tokens, index, options);
@@ -384,6 +407,7 @@ function createMarkdown(environment: RenderEnvironment): MarkdownIt {
 
   const defaultImage = markdown.renderer.rules.image;
   markdown.renderer.rules.image = (tokens, index, options, env, renderer) => {
+    const environment = renderEnvironment(env);
     const token = tokens[index];
     const source = token?.attrGet("src");
     if (token && source) {
@@ -399,37 +423,53 @@ function createMarkdown(environment: RenderEnvironment): MarkdownIt {
   return markdown;
 }
 
-export function renderMarkdown(
-  page: Page,
-  site: Site,
-): {
+export type MarkdownRenderResult = {
   anchors: Set<string>;
   assets: Set<string>;
   diagrams: number;
   html: string;
   internalReferences: Array<{ fragment?: string; target: Page }>;
   math: number;
-} {
-  page.headings = [];
-  const environment: RenderEnvironment = {
-    annotationCount: 0,
-    anchors: new Set<string>(),
-    assets: new Set<string>(),
-    headings: page.headings,
-    internalReferences: [],
-    page,
-    site,
-    diagramCount: 0,
-    mathCount: 0,
+};
+
+export type MarkdownRenderer = (page: Page, site: Site) => MarkdownRenderResult;
+
+export function createMarkdownRenderer(): MarkdownRenderer {
+  let mathMarkdown: MarkdownIt | undefined;
+  let plainMarkdown: MarkdownIt | undefined;
+  return (page, site) => {
+    const markdown = site.config.markdown.math
+      ? (mathMarkdown ??= createMarkdown(true))
+      : (plainMarkdown ??= createMarkdown(false));
+    page.headings = [];
+    const environment: RenderEnvironment = {
+      annotationCount: 0,
+      anchors: new Set<string>(),
+      assets: new Set<string>(),
+      headings: page.headings,
+      internalReferences: [],
+      page,
+      site,
+      diagramCount: 0,
+      mathCount: 0,
+    };
+    // markdown-it builds large results as V8 rope strings. Flatten them before
+    // retaining the render graph so a persistent compiler does not keep the
+    // intermediate string tree alive for every page.
+    const html = structuredClone(markdown.render(page.body, environment));
+    return {
+      anchors: environment.anchors,
+      assets: environment.assets,
+      diagrams: environment.diagramCount,
+      html,
+      internalReferences: environment.internalReferences,
+      math: environment.mathCount,
+    };
   };
-  const markdown = createMarkdown(environment);
-  const html = markdown.render(page.body, environment);
-  return {
-    anchors: environment.anchors,
-    assets: environment.assets,
-    diagrams: environment.diagramCount,
-    html,
-    internalReferences: environment.internalReferences,
-    math: environment.mathCount,
-  };
+}
+
+const sharedMarkdownRenderer = createMarkdownRenderer();
+
+export function renderMarkdown(page: Page, site: Site): MarkdownRenderResult {
+  return sharedMarkdownRenderer(page, site);
 }

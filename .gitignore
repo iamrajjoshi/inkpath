@@ -6,3 +6,6 @@ dist/
 .DS_Store
 *.log
 *.tgz
+.inkpath-benchmark/
+benchmark-results.json
+*.cpuprofile
