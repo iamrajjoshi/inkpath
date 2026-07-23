@@ -77,6 +77,11 @@ export type Page = {
   title: string;
 };
 
+export type PageNeighbors = {
+  next?: Page;
+  previous?: Page;
+};
+
 export type Site = {
   config: InkpathConfig;
   home: Page;
@@ -86,11 +91,34 @@ export type Site = {
   sections: Page[];
 };
 
+export type BuildTimings = {
+  assetsMs: number;
+  configMs: number;
+  contentMs: number;
+  documentRenderMs: number;
+  graphMs: number;
+  markdownMs: number;
+  outputWriteMs: number;
+  publishMs: number;
+  totalMs: number;
+};
+
+export type IncrementalBuildStats = {
+  changedPaths: number;
+  mode: "clean" | "full" | "noop" | "partial";
+  parsedPages: number;
+  renderedDocuments: number;
+  renderedMarkdown: number;
+  writtenFiles: number;
+};
+
 export type BuildResult = {
   diagrams: number;
   elapsedMs: number;
   math: number;
+  incremental?: IncrementalBuildStats;
   orphans: number;
   pages: number;
   site: Site;
+  timings?: BuildTimings;
 };

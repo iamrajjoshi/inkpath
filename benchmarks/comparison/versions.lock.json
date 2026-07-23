@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schemaVersion": 1,
+  "recordedAt": "2026-07-20",
+  "tools": {
+    "inkpath": {
+      "source": "workspace",
+      "version": "0.3.0"
+    },
+    "hugo": {
+      "version": "0.164.0",
+      "release": "https://github.com/gohugoio/hugo/releases/tag/v0.164.0",
+      "artifact": "hugo_0.164.0_darwin-universal.pkg",
+      "artifactSha256": "c994e2cc6946838bb76521039509a7ce71282827e7035e344b6c225a83a5d0d3",
+      "executableSha256": "360e2bb3b2fa34785f693e590558d449e6b7626fb7105c75bc1ef8a89f099fb9"
+    },
+    "mkdocs": {
+      "version": "1.6.1",
+      "requirement": "mkdocs==1.6.1",
+      "release": "https://pypi.org/project/mkdocs/1.6.1/",
+      "distributions": {
+        "click": "8.4.2",
+        "ghp-import": "2.1.0",
+        "jinja2": "3.1.6",
+        "markdown": "3.10.2",
+        "markupsafe": "3.0.3",
+        "mergedeep": "1.3.4",
+        "mkdocs": "1.6.1",
+        "mkdocs-get-deps": "0.2.2",
+        "packaging": "26.2",
+        "pathspec": "1.1.1",
+        "platformdirs": "4.10.1",
+        "python-dateutil": "2.9.0.post0",
+        "pyyaml": "6.0.3",
+        "pyyaml-env-tag": "1.1",
+        "six": "1.17.0",
+        "watchdog": "6.0.0"
+      }
+    },
+    "docusaurus": {
+      "version": "3.10.2",
+      "release": "https://github.com/facebook/docusaurus/releases/tag/v3.10.2",
+      "packages": {
+        "@docusaurus/core": "3.10.2",
+        "@docusaurus/preset-classic": "3.10.2",
+        "react": "19.2.7",
+        "react-dom": "19.2.7"
+      },
+      "packageLockSha256": "6473e35564d486dadcdb2cb17ae588d60033b1d08c88b5a55bf4df8396faa402",
+      "corePackageSha256": "35ef00ea3ee9509bca70a5841d71b87c5e96247d194099901d3e3e1a51ce26e0"
+    },
+    "quartz": {
+      "version": "5.0.0",
+      "tag": "v5.0.0",
+      "commit": "ab346fa66a895e12d63a308e70ce330ba795822a",
+      "release": "https://github.com/jackyzha0/quartz/releases/tag/v5.0.0",
+      "packageLockSha256": "b0486eb49bfbd1769189da57165a3acb4cc59f75a0cb72f4eb50d026568f8b85",
+      "pluginLockSha256": "967f243601c16a8ea7a880bd84cd200e8f99ae4fa4001027f6d24ef05b63f880",
+      "pluginCheckouts": {
+        "note-properties": {
+          "commit": "353531585033528eef9faa7eb2f27e377db7fa14",
+          "packageLockSha256": "a244ca56e5796cf2b2247463e9be777a8925e0641fef8593e241710cd47e284c"
+        },
+        "syntax-highlighting": {
+          "commit": "4593694be62ed55486d89b36f40a027a7b48233c",
+          "packageLockSha256": "d9c3e14d902794fe90930f50d5313547423af0d966f43369306374f5ff10d75b"
+        },
+        "github-flavored-markdown": {
+          "commit": "628366ec62c1122da1eaef7c988d53bdaae3d19a",
+          "packageLockSha256": "a799a92189aa27f150b4181017762158d56992e89886863d57541c3cc62b41af"
+        },
+        "crawl-links": {
+          "commit": "5ccbcb5f3ac7b1c24fbcb34aa2454df06fe7031c",
+          "packageLockSha256": "b0c8aaed3aebe59676efe3c25b78daaf796771f4386f4dcd98438878c6a06ae4"
+        },
+        "description": {
+          "commit": "76f05fb1ddcc412660ff247bb7ed532e2730c641",
+          "packageLockSha256": "5b30206f90156c71756f03cfaa932efcfb77541f838f0e6ff22618a1c493ff7c"
+        },
+        "remove-draft": {
+          "commit": "c44b2a1314cfe8ac4d4450a566ec9a122daba5f2",
+          "packageLockSha256": "11db38d1a7d44abc05292e7f7f77d7391ae00cd2767c0a467a6caf9c63344765"
+        },
+        "content-page": {
+          "commit": "b8a3f3bb6a126256b12f55879d144ba2ac104b73",
+          "packageLockSha256": "47d7f762881f80375437e1d3c582bd7979c1f18f4cf0e404cc3e989dadec86d3"
+        },
+        "folder-page": {
+          "commit": "0bb653d651626dece1e56fd7a08d3f2fb3a3cd8a",
+          "packageLockSha256": "205f10975c9aece2e11c63bd3a4d7cb6b7c35c3ab6fdf94a1c6081082f95b994"
+        },
+        "footer": {
+          "commit": "f0fe3d6ca24624d955a4f4e62e5aafabe053f29e",
+          "packageLockSha256": "b43b3f5f7a2c1869979265d93c028a799f863a1df488410fae0c1b383445d722"
+        },
+        "og-image": {
+          "commit": "ab1f8e5ddcd3d9e9c55ea9f8f4163ae34cabe6ce",
+          "packageLockSha256": "35b7f32a2788ba4ec533a52e6e9ef88b73126629d02e471a978cdcdb59d92550"
+        }
+      }
+    }
+  }
+}

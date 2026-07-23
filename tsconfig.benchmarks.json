@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "noEmit": false,
+    "noEmitOnError": true,
+    "outDir": ".inkpath-benchmark/runner",
+    "rootDir": "benchmarks",
+    "sourceMap": true
+  },
+  "include": ["benchmarks/**/*.ts"],
+  "exclude": ["tests"]
+}

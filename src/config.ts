@@ -1,37 +1,11 @@
-import { access, lstat, readFile, realpath } from "node:fs/promises";
+import { lstat, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import YAML from "yaml";
 import { assertKnownKeys } from "./schema.js";
 import type { InkpathConfig } from "./types.js";
 import { assertInsideProject, isPathWithin, normalizeBasePath, pathsOverlap } from "./utils.js";
 
-type RawConfig = {
-  content?: string;
-  output?: string;
-  public?: string;
-  site?: {
-    author?: string;
-    title?: string;
-    description?: string;
-    lang?: string;
-    basePath?: string;
-    url?: string;
-    logo?: string;
-    image?: string;
-  };
-  markdown?: {
-    math?: boolean;
-  };
-  theme?: {
-    accent?: string;
-    interactive?: string;
-    interactiveHover?: string;
-    showListDetails?: boolean;
-    showPageDetails?: boolean;
-    stylesheet?: string;
-    subtle?: string;
-  };
-};
+type YamlMapping = Record<string, unknown>;
 
 const CONFIG_KEYS = ["content", "output", "public", "site", "markdown", "theme"] as const;
 const SITE_KEYS = [
@@ -55,13 +29,34 @@ const THEME_KEYS = [
   "subtle",
 ] as const;
 
-async function exists(filePath: string): Promise<boolean> {
+function isYamlMapping(value: unknown): value is YamlMapping {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function optionalYamlMapping(value: unknown, label: string): YamlMapping {
+  if (value === undefined) return {};
+  if (!isYamlMapping(value)) throw new Error(`${label} must be a YAML mapping`);
+  return value;
+}
+
+async function readRawConfig(projectRoot: string): Promise<YamlMapping> {
+  const configPath = path.join(projectRoot, "inkpath.yaml");
+  let source: string;
   try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
+    source = await readFile(configPath, "utf8");
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return {};
+    throw error;
   }
+  const parsed: unknown = YAML.parse(source);
+  if (!isYamlMapping(parsed)) {
+    throw new Error("inkpath.yaml must contain a YAML mapping");
+  }
+  assertKnownKeys(parsed, CONFIG_KEYS, {
+    source: "inkpath.yaml",
+    scope: "configuration",
+  });
+  return parsed;
 }
 
 async function resolveProjectDirectory(
@@ -95,6 +90,48 @@ async function resolveProjectDirectory(
   }
 
   return cursor;
+}
+
+async function resolveWatchDirectory(projectRoot: string, target: string): Promise<string> {
+  const parts = path.relative(projectRoot, target).split(path.sep).filter(Boolean);
+  let cursor = projectRoot;
+
+  for (let index = 0; index < parts.length; index += 1) {
+    const candidate = path.join(cursor, parts[index] ?? "");
+    let info: Awaited<ReturnType<typeof lstat>>;
+    try {
+      info = await lstat(candidate);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      return cursor;
+    }
+
+    // A broken configuration still needs to be recoverable without restarting
+    // the dev server. Watching the last verified directory observes the bad
+    // entry being replaced, without asking Chokidar to traverse it.
+    if (info.isSymbolicLink() || !info.isDirectory()) return cursor;
+
+    const resolved = await realpath(candidate);
+    if (!isPathWithin(projectRoot, resolved)) return cursor;
+    cursor = resolved;
+  }
+
+  return cursor;
+}
+
+export async function configuredWatchDirectories(projectDirectory = "."): Promise<string[]> {
+  const projectRoot = await realpath(path.resolve(projectDirectory));
+  const raw = await readRawConfig(projectRoot);
+  const contentName = optionalString(raw.content, "content") ?? "content";
+  const publicName = optionalString(raw.public, "public") ?? "public";
+  const requestedContentDir = path.resolve(projectRoot, contentName);
+  const requestedPublicDir = path.resolve(projectRoot, publicName);
+  assertInsideProject(projectRoot, requestedContentDir, "content");
+  assertInsideProject(projectRoot, requestedPublicDir, "public");
+  return [
+    await resolveWatchDirectory(projectRoot, requestedContentDir),
+    await resolveWatchDirectory(projectRoot, requestedPublicDir),
+  ];
 }
 
 function optionalString(value: unknown, label: string): string | undefined {
@@ -183,20 +220,7 @@ async function validatePublicFile(publicDir: string, asset: string, label: strin
 
 export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig> {
   const projectRoot = await realpath(path.resolve(projectDirectory));
-  const configPath = path.join(projectRoot, "inkpath.yaml");
-  let raw: RawConfig = {};
-
-  if (await exists(configPath)) {
-    const parsed = YAML.parse(await readFile(configPath, "utf8"));
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error("inkpath.yaml must contain a YAML mapping");
-    }
-    assertKnownKeys(parsed, CONFIG_KEYS, {
-      source: "inkpath.yaml",
-      scope: "configuration",
-    });
-    raw = parsed as RawConfig;
-  }
+  const raw = await readRawConfig(projectRoot);
 
   const contentName = optionalString(raw.content, "content") ?? "content";
   const outputName = optionalString(raw.output, "output") ?? "site";
@@ -220,13 +244,7 @@ export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig>
   if (pathsOverlap(contentDir, publicDir)) {
     throw new Error("content and public directories cannot overlap");
   }
-  if (
-    raw.site !== undefined &&
-    (typeof raw.site !== "object" || raw.site === null || Array.isArray(raw.site))
-  ) {
-    throw new Error("site must be a YAML mapping");
-  }
-  const site = raw.site ?? {};
+  const site = optionalYamlMapping(raw.site, "site");
   assertKnownKeys(site, SITE_KEYS, { source: "inkpath.yaml", scope: "site" });
   const author = optionalString(site.author, "site.author");
   const title = optionalString(site.title, "site.title");
@@ -236,24 +254,12 @@ export async function loadConfig(projectDirectory = "."): Promise<InkpathConfig>
   const image = optionalPublicAsset(site.image, "site.image");
   if (logo) await validatePublicFile(publicDir, logo, "site.logo");
   if (image) await validatePublicFile(publicDir, image, "site.image");
-  if (
-    raw.markdown !== undefined &&
-    (typeof raw.markdown !== "object" || raw.markdown === null || Array.isArray(raw.markdown))
-  ) {
-    throw new Error("markdown must be a YAML mapping");
-  }
-  const markdown = raw.markdown ?? {};
+  const markdown = optionalYamlMapping(raw.markdown, "markdown");
   assertKnownKeys(markdown, MARKDOWN_KEYS, {
     source: "inkpath.yaml",
     scope: "markdown",
   });
-  if (
-    raw.theme !== undefined &&
-    (typeof raw.theme !== "object" || raw.theme === null || Array.isArray(raw.theme))
-  ) {
-    throw new Error("theme must be a YAML mapping");
-  }
-  const theme = raw.theme ?? {};
+  const theme = optionalYamlMapping(raw.theme, "theme");
   assertKnownKeys(theme, THEME_KEYS, { source: "inkpath.yaml", scope: "theme" });
   const stylesheet = optionalPublicAsset(theme.stylesheet, "theme.stylesheet");
   if (stylesheet && !stylesheet.toLowerCase().endsWith(".css")) {

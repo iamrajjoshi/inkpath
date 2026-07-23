@@ -1,5 +1,12 @@
 import path from "node:path";
 
+const dateFormatter = new Intl.DateTimeFormat("en", {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
+
 export function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -132,10 +139,5 @@ export function formatDate(value: unknown): string | undefined {
   if (!(typeof value === "string" || value instanceof Date)) return undefined;
   const date = new Date(value);
   if (Number.isNaN(date.valueOf())) return undefined;
-  return new Intl.DateTimeFormat("en", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  }).format(date);
+  return dateFormatter.format(date);
 }

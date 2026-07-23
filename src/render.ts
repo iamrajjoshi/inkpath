@@ -1,4 +1,4 @@
-import type { Page, Site } from "./types.js";
+import type { Page, PageNeighbors, Site } from "./types.js";
 import { escapeHtml, formatDate, siteUrl } from "./utils.js";
 import { INKPATH_VERSION } from "./version.js";
 
@@ -7,6 +7,22 @@ export type DocumentAssets = {
   diagrams: number;
   math: number;
   mermaidEntry?: string;
+};
+
+type RenderConstants = {
+  siteMark: string;
+  siteTitle: string;
+  stylesheet: string;
+};
+
+type RenderIndex = RenderConstants & {
+  feeds: boolean;
+  pagination: WeakMap<Page, PageNeighbors>;
+};
+
+export type SiteRenderer = {
+  document: (page: Page, assets: DocumentAssets) => string;
+  notFound: () => string;
 };
 
 function pageUrl(site: Site, page: Page): string {
@@ -31,6 +47,54 @@ function renderSiteMark(site: Site): string {
     return `<img class="site-logo" src="${escapeHtml(publicAssetUrl(site, logo))}" alt="" width="28" height="28">`;
   }
   return `<span class="site-mark" aria-hidden="true"><span></span><span></span><span></span></span>`;
+}
+
+function createRenderConstants(site: Site): RenderConstants {
+  return {
+    siteMark: renderSiteMark(site),
+    siteTitle: site.config.site.title ?? site.home.title,
+    stylesheet: stylesheetUrl(site),
+  };
+}
+
+function createRenderIndex(site: Site, targetPage?: Page): RenderIndex {
+  let datedPages = false;
+  const pagination = new WeakMap<Page, PageNeighbors>();
+  const parents = new Set<Page>();
+
+  for (const page of site.pages) {
+    if (
+      site.config.site.url &&
+      !datedPages &&
+      (formatDate(page.attributes.updated) !== undefined ||
+        formatDate(page.attributes.date) !== undefined)
+    ) {
+      datedPages = true;
+    }
+    if (!targetPage && page.kind === "page" && page.parent) parents.add(page.parent);
+  }
+
+  if (targetPage?.kind === "page" && targetPage.parent) parents.add(targetPage.parent);
+
+  for (const parent of parents) {
+    const siblings = parent.children.filter((child) => child.kind === "page");
+    for (let index = 0; index < siblings.length; index += 1) {
+      const page = siblings[index];
+      if (!page) continue;
+      const previous = siblings[index - 1];
+      const next = siblings[index + 1];
+      pagination.set(page, {
+        ...(next ? { next } : {}),
+        ...(previous ? { previous } : {}),
+      });
+    }
+  }
+
+  return {
+    ...createRenderConstants(site),
+    feeds: datedPages,
+    pagination,
+  };
 }
 
 function renderBreadcrumb(site: Site, page: Page): string {
@@ -158,12 +222,9 @@ function renderContentList(site: Site, page: Page): string {
   </section>`;
 }
 
-function renderPagination(site: Site, page: Page): string {
+function renderPagination(site: Site, page: Page, index: RenderIndex): string {
   if (page.kind !== "page" || !page.parent) return "";
-  const siblings = page.parent.children.filter((child) => child.kind === "page");
-  const index = siblings.indexOf(page);
-  const previous = index > 0 ? siblings[index - 1] : undefined;
-  const next = index >= 0 && index < siblings.length - 1 ? siblings[index + 1] : undefined;
+  const { previous, next } = index.pagination.get(page) ?? {};
   if (!previous && !next) return "";
   return `<nav class="page-pagination" aria-label="Adjacent notes">
     ${previous ? `<a rel="prev" href="${escapeHtml(pageUrl(site, previous))}"><span>Previous</span><strong>${escapeHtml(previous.title)}</strong></a>` : "<span></span>"}
@@ -171,8 +232,8 @@ function renderPagination(site: Site, page: Page): string {
   </nav>`;
 }
 
-function renderFooter(site: Site, page: Page): string {
-  const pagination = renderPagination(site, page);
+function renderFooter(site: Site, page: Page, index: RenderIndex): string {
+  const pagination = renderPagination(site, page, index);
   if (!pagination) return "";
   return `<footer class="page-footer">
     ${pagination}
@@ -197,19 +258,16 @@ function absolutePublicAsset(site: Site, asset: string): string | undefined {
   return new URL(publicAssetUrl(site, asset), `${base}/`).href;
 }
 
-function hasFeeds(site: Site): boolean {
-  return site.pages.some(
-    (page) =>
-      formatDate(page.attributes.updated) !== undefined ||
-      formatDate(page.attributes.date) !== undefined,
-  );
-}
-
-function renderSocialMetadata(site: Site, page: Page, title: string, canonical?: string): string {
+function renderSocialMetadata(
+  site: Site,
+  page: Page,
+  title: string,
+  siteTitle: string,
+  canonical?: string,
+): string {
   if (!canonical) return "";
   const imageAsset = site.config.site.image ?? site.config.site.logo;
   const image = imageAsset ? absolutePublicAsset(site, imageAsset) : undefined;
-  const siteTitle = site.config.site.title ?? site.home.title;
   const tags = page.attributes.tags ?? [];
   return [
     `<meta property="og:title" content="${escapeHtml(title)}">`,
@@ -240,8 +298,13 @@ function renderSocialMetadata(site: Site, page: Page, title: string, canonical?:
   ].join("\n  ");
 }
 
-export function renderDocument(site: Site, page: Page, assets: DocumentAssets): string {
-  const siteTitle = site.config.site.title ?? site.home.title;
+function renderDocumentWithIndex(
+  site: Site,
+  page: Page,
+  assets: DocumentAssets,
+  index: RenderIndex,
+): string {
+  const { siteTitle } = index;
   const description = page.summary;
   const title = page.kind === "home" ? siteTitle : `${page.title} · ${siteTitle}`;
   const canonical = absoluteCanonical(site, page);
@@ -252,7 +315,7 @@ export function renderDocument(site: Site, page: Page, assets: DocumentAssets): 
     assets.diagrams && assets.mermaidEntry
       ? `<script type="module" src="${escapeHtml(`${site.config.site.basePath}/_inkpath/${assets.mermaidEntry}`)}"></script>`
       : "";
-  const feeds = hasFeeds(site);
+  const feeds = index.feeds;
 
   return `<!doctype html>
 <html lang="${escapeHtml(site.config.site.lang)}">
@@ -263,11 +326,11 @@ export function renderDocument(site: Site, page: Page, assets: DocumentAssets): 
   <meta name="description" content="${escapeHtml(description)}">
   <meta name="generator" content="Inkpath ${escapeHtml(INKPATH_VERSION)}">
   ${canonical ? `<link rel="canonical" href="${escapeHtml(canonical)}">` : ""}
-  ${renderSocialMetadata(site, page, title, canonical)}
+  ${renderSocialMetadata(site, page, title, siteTitle, canonical)}
   ${feeds ? `<link rel="alternate" type="application/rss+xml" title="${escapeHtml(siteTitle)} RSS" href="${escapeHtml(`${site.config.site.basePath}/rss.xml`)}">` : ""}
   ${feeds ? `<link rel="alternate" type="application/atom+xml" title="${escapeHtml(siteTitle)} Atom" href="${escapeHtml(`${site.config.site.basePath}/atom.xml`)}">` : ""}
   <link rel="icon" href="${escapeHtml(`${site.config.site.basePath}/favicon.svg`)}" type="image/svg+xml">
-  <link rel="stylesheet" href="${escapeHtml(stylesheetUrl(site))}">
+  <link rel="stylesheet" href="${escapeHtml(index.stylesheet)}">
   ${assets.math ? `<link rel="stylesheet" href="${escapeHtml(`${site.config.site.basePath}/_inkpath/katex/katex.min.css`)}">` : ""}
 </head>
 <body${buildCommit ? ` class="has-build-commit"` : ""}>
@@ -275,7 +338,7 @@ export function renderDocument(site: Site, page: Page, assets: DocumentAssets): 
   <header class="site-header">
     <div class="site-header__inner">
       <a class="site-brand" href="${escapeHtml(pageUrl(site, site.home))}">
-        ${renderSiteMark(site)}
+        ${index.siteMark}
         <span class="site-title">${escapeHtml(siteTitle)}</span>
       </a>
     </div>
@@ -286,7 +349,7 @@ export function renderDocument(site: Site, page: Page, assets: DocumentAssets): 
     ${bodyContent}
     ${listing}
     ${renderBacklinks(site, page)}
-    ${renderFooter(site, page)}
+    ${renderFooter(site, page, index)}
   </main>
   ${buildCommit}
   ${script}
@@ -295,7 +358,23 @@ export function renderDocument(site: Site, page: Page, assets: DocumentAssets): 
 `;
 }
 
-export function renderNotFound(site: Site): string {
-  const siteTitle = site.config.site.title ?? site.home.title;
-  return `<!doctype html><html lang="${escapeHtml(site.config.site.lang)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Not found · ${escapeHtml(siteTitle)}</title><link rel="stylesheet" href="${escapeHtml(stylesheetUrl(site))}"></head><body><main class="page-shell"><header class="page-header"><h1>Page not found</h1><p class="lede">The requested note does not exist.</p></header><p><a href="${escapeHtml(pageUrl(site, site.home))}">Return to the contents</a></p></main></body></html>\n`;
+function renderNotFoundWithIndex(site: Site, index: RenderConstants): string {
+  return `<!doctype html><html lang="${escapeHtml(site.config.site.lang)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Not found · ${escapeHtml(index.siteTitle)}</title><link rel="stylesheet" href="${escapeHtml(index.stylesheet)}"></head><body><main class="page-shell"><header class="page-header"><h1>Page not found</h1><p class="lede">The requested note does not exist.</p></header><p><a href="${escapeHtml(pageUrl(site, site.home))}">Return to the contents</a></p></main></body></html>\n`;
+}
+
+/**
+ * Create a renderer for one immutable site snapshot. Construct a new renderer
+ * after changing configuration or any page metadata/tree relationship.
+ */
+export function createSiteRenderer(site: Site): SiteRenderer {
+  const index = createRenderIndex(site);
+  return {
+    document: (page, assets) => renderDocumentWithIndex(site, page, assets, index),
+    notFound: () => renderNotFoundWithIndex(site, index),
+  };
+}
+
+/** Render one document without retaining metadata from a mutable Site object. */
+export function renderDocument(site: Site, page: Page, assets: DocumentAssets): string {
+  return renderDocumentWithIndex(site, page, assets, createRenderIndex(site, page));
 }
